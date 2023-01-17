@@ -75,7 +75,7 @@ impl eframe::App for TemplateApp {
                 ui.text_edit_singleline(label);
             });
 
-            ui.add(egui::Slider::new(value, 0.0..=10.0).text("value"));
+            ui.add(egui::Slider::new(value, 0.0..=100.0).text("value"));
             if ui.button("Increment").clicked() {
                 *value += 1.0;
             }
@@ -91,7 +91,7 @@ impl eframe::App for TemplateApp {
                     ui.hyperlink_to("egui", "https://github.com/emilk/egui");
                     ui.label(" and ");
                     ui.hyperlink_to(
-                        "eframe1",
+                        "eframe",
                         "https://github.com/emilk/egui/tree/master/crates/eframe",
                     );
                     ui.label(".");
@@ -103,9 +103,9 @@ impl eframe::App for TemplateApp {
             // The central panel the region left after adding TopPanel's and SidePanel's
 
             ui.heading("eframe template");
-            ui.hyperlink("https://github.com/emilk/eframe_template");
+            ui.hyperlink("https://github.com/adrodgers/gravity_model_webapp");
             ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/master/",
+                "https://github.com/adrodgers/gravity_model_webapp/blob/master/",
                 "Source code."
             ));
             egui::warn_if_debug_build(ui);

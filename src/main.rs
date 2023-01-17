@@ -9,7 +9,7 @@ fn main() {
 
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
-        "eframe template",
+        "gravity_model_webapp",
         native_options,
         Box::new(|cc| Box::new(gravity_model_webapp::TemplateApp::new(cc))),
     );
