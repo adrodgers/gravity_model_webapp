@@ -8,6 +8,8 @@ pub struct TemplateApp {
     // this how you opt-out of serialization of a member
     #[serde(skip)]
     value: f32,
+    #[serde(skip)]
+    value_2: f32
 }
 
 impl Default for TemplateApp {
@@ -16,6 +18,7 @@ impl Default for TemplateApp {
             // Example stuff:
             label: "Hello World!".to_owned(),
             value: 2.7,
+            value_2: 1.0
         }
     }
 }
@@ -45,7 +48,7 @@ impl eframe::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let Self { label, value } = self;
+        let Self { label, value, value_2 } = self;
 
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
@@ -65,7 +68,7 @@ impl eframe::App for TemplateApp {
         });
 
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.heading("Side Panel");
+            ui.heading("Side Panel Test");
 
             ui.horizontal(|ui| {
                 ui.label("Write something: ");
@@ -76,6 +79,10 @@ impl eframe::App for TemplateApp {
             if ui.button("Increment").clicked() {
                 *value += 1.0;
             }
+            ui.add(egui::Slider::new(value_2, 0.0..=100.0).text("value_2"));
+            if ui.button("Increment").clicked() {
+                *value_2 += 1.0;
+            }
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 ui.horizontal(|ui| {
@@ -84,7 +91,7 @@ impl eframe::App for TemplateApp {
                     ui.hyperlink_to("egui", "https://github.com/emilk/egui");
                     ui.label(" and ");
                     ui.hyperlink_to(
-                        "eframe",
+                        "eframe1",
                         "https://github.com/emilk/egui/tree/master/crates/eframe",
                     );
                     ui.label(".");
