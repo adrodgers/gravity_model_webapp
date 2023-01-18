@@ -68,7 +68,7 @@ impl eframe::App for TemplateApp {
         });
 
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.heading("Side Panel Test");
+            ui.heading("Cuboid Params");
 
             ui.horizontal(|ui| {
                 ui.label("Write something: ");
@@ -102,7 +102,7 @@ impl eframe::App for TemplateApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
 
-            ui.heading("eframe template");
+            ui.heading("Gravity Model");
             ui.hyperlink("https://github.com/adrodgers/gravity_model_webapp");
             ui.add(egui::github_link_file!(
                 "https://github.com/adrodgers/gravity_model_webapp/blob/master/",
@@ -111,7 +111,7 @@ impl eframe::App for TemplateApp {
             egui::warn_if_debug_build(ui);
         });
 
-        if false {
+        if true {
             egui::Window::new("Window").show(ctx, |ui| {
                 ui.label("Windows can be moved by dragging them.");
                 ui.label("They are automatically sized based on contents.");
