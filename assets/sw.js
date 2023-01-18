@@ -1,7 +1,7 @@
 var cacheName = 'gravity_model_webapp_pwa';
 var filesToCache = [
   './',
-  // './index.html#dev',
+  './index.html#dev',
   './gravity_model_webapp.js',
   './gravity_model_webapp_bg.wasm',
 ];
