@@ -8,7 +8,7 @@ use std::fmt::{self};
 const G: f64 = 6.674e-11;
 
 pub struct Cuboid {
-    vertices: Array2<f64>,
+    pub vertices: Array2<f64>,
     density: f64,
 }
 
@@ -74,21 +74,23 @@ impl Cuboid {
         self.x_length() * self.y_length() * self.z_length()
     }
 
-    fn scale(&mut self, factor: f64) {
-        self.vertices = &self.vertices * factor;
+    pub fn scale(&mut self, factor: (f64,f64,f64)) {
+        self.scale_x(factor.0);
+        self.scale_y(factor.1);
+        self.scale_z(factor.2);
     }
 
-    fn scale_x(&mut self, factor: f64) {
+    pub fn scale_x(&mut self, factor: f64) {
         let mut x = self.vertices.index_axis_mut(Axis(1), 0);
         x *= factor;
     }
 
-    fn scale_y(&mut self, factor: f64) {
+    pub fn scale_y(&mut self, factor: f64) {
         let mut y = self.vertices.index_axis_mut(Axis(1), 1);
         y *= factor;
     }
 
-    fn scale_z(&mut self, factor: f64) {
+    pub fn scale_z(&mut self, factor: f64) {
         let mut z = self.vertices.index_axis_mut(Axis(1), 2);
         z *= factor;
     }
@@ -97,7 +99,7 @@ impl Cuboid {
         self.density * self.volume()
     }
 
-    fn translate(&mut self, point: &Array1<f64>) {
+    pub fn translate(&mut self, point: &Array1<f64>) {
         self.vertices += point;
     }
 
@@ -131,12 +133,19 @@ impl Cuboid {
         self.vertices = rotated_vertices;
     }
 
+    /// Order of indices for gravity summation
     fn index_order() -> Array1<f64> {
         array![1., -1., 1., -1., -1., 1., -1., 1.]
     }
 
-    fn centre(&self) -> Array1<f64> {
+    pub fn centre(&self) -> Array1<f64> {
         self.vertices.sum_axis(Axis(0)) / 8.
+    }
+
+    /// Return verices ordered to plot a rectangle using egui Polygon
+    pub fn vertices_xz(&self) -> Vec<[f64;2]> {
+        let verts = &self.vertices;
+        vec![[verts[[0, 0]],verts[[0, 2]]],[verts[[1, 0]],verts[[1, 2]]],[verts[[6, 0]],verts[[6, 2]]],[verts[[4, 0]],verts[[4, 2]]],]
     }
 
     // fn gravity(&self, position: &Array1<f64>) -> Array1<f64> {
@@ -180,7 +189,7 @@ impl Cuboid {
     //     gravity_gradient * G * self.density
     // }
 
-    fn gz (&self , position: &Array1<f64>) -> f64 {
+    pub fn gz (&self , position: &Array1<f64>) -> f64 {
         let mut gz = 0.;
         for i in 0..8 {
             let p_dash: Array1<f64> =
@@ -198,7 +207,7 @@ impl Cuboid {
         gz * G * self.density
     }
 
-    fn gzz (&self , position: &Array1<f64>) -> f64 {
+    pub fn gzz (&self , position: &Array1<f64>) -> f64 {
         let mut gzz = 0.;
         for i in 0..8 {
             let p_dash: Array1<f64> =
