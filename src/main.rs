@@ -1,6 +1,7 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+mod cuboid;
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
@@ -9,7 +10,7 @@ fn main() {
 
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
-        "gravity_model_webapp",
+        "Gravity Model",
         native_options,
         Box::new(|cc| Box::new(gravity_model_webapp::TemplateApp::new(cc))),
     );
