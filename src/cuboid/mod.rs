@@ -204,7 +204,7 @@ impl Cuboid {
                 * ((x * (r + y).ln()) + (y * (r + x).ln())
                     - (z * ((x * y) / (r * z)).atan()));
         };
-        gz * G * self.density
+        - gz * G * self.density
     }
 
     pub fn gzz (&self , position: &Array1<f64>) -> f64 {
