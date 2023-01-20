@@ -51,7 +51,7 @@ pub struct MeasurementParameters {
 
 impl Default for MeasurementParameters {
     fn default() -> Self {
-        Self { measurement_type: DataType::Gz, x_start: -50., x_end: 50., n: 200, y: 0., z: 0.25 }
+        Self { measurement_type: DataType::Gz, x_start: -10., x_end: 10., n: 200, y: 0., z: 0.25 }
     }
 }
 
@@ -211,13 +211,13 @@ impl eframe::App for TemplateApp {
             egui::CollapsingHeader::new("volume")
                 .show(ui, |ui| {
                     ui.label("x length");
-                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].x_length, 1.0..=100.0).text("m"));
+                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].x_length, 0.1..=100.0).text("m"));
                     
                     ui.label("y length");
-                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].y_length, 1.0..=100.0).text("m"));
+                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].y_length, 0.1..=100.0).text("m"));
 
                     ui.label("z length");
-                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].z_length, 1.0..=25.0).text("m"));
+                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].z_length, 0.1..=25.0).text("m"));
                     ui.separator();
                     ui.label(format!("Volume: {}",cuboids_params[*current_cuboid_index].cuboid().volume()));
             });
@@ -355,21 +355,24 @@ impl eframe::App for TemplateApp {
             // if ui.button("gz").clicked() {
             //     println!("{:?}",gz);
             // }
-            let mut data_plot = Plot::new("gravity")
+            let data_plot = Plot::new("gravity")
             .view_aspect(2.0)
             .link_axis(group.clone())
-            .include_x(-50.)
-            .include_x(50.)
+            .include_x(-10.)
+            .include_x(10.)
             .include_y(0.)
+            .width(720.)
             .legend(Legend::default());
 
-            let mut model_plot = Plot::new("underground")
+            let model_plot = Plot::new("underground")
             .view_aspect(2.0)
+            .data_aspect(1.0)
             .link_axis(group.clone())
-            .include_x(-50.)
-            .include_x(50.)
+            .include_x(-10.)
+            .include_x(10.)
             .include_y(2.)
             .include_y(-10.)
+            .width(720.)
             .legend(Legend::default());
 
             let data_2d: Vec<_> = x.into_iter().zip(data_total.into_iter()).map(|(x,val)| {
@@ -382,24 +385,25 @@ impl eframe::App for TemplateApp {
             let data_total_line = Line::new(data_2d);
             
             data_plot
-            .show(ui, |plot_ui| {plot_ui.line(data_total_line.color(Color32::WHITE).name("data total")); for (i,datum) in data.iter().enumerate() {
-                let data_2d: Vec<_> = x.into_iter().zip(datum.into_iter()).map(|(x,val)| {
-                let scaling = match measurement_params.measurement_type {
-                    DataType::Gx | DataType::Gy | DataType::Gz => {1E8},
-                    _ => {1E9}
-                };
-                // data_total = data_total + datum * scaling;
-                [*x,val*scaling]}).collect();
-                let line = Line::new(data_2d);
-                plot_ui.line(line.name(format!("cuboid {i}")).color(colour_vec[i]));
-            }});
+            .show(ui, |plot_ui| {plot_ui.line(data_total_line.color(Color32::WHITE).name("data total")); 
+                for (i,datum) in data.iter().enumerate() {
+                    let data_2d: Vec<_> = x.into_iter().zip(datum.into_iter()).map(|(x,val)| {
+                    let scaling = match measurement_params.measurement_type {
+                        DataType::Gx | DataType::Gy | DataType::Gz => {1E8},
+                        _ => {1E9}
+                    };
+                    [*x,val*scaling]}).collect();
+                    let line = Line::new(data_2d);
+                    plot_ui.line(line.name(format!("cuboid {i}")).color(colour_vec[i]));
+                }
+            });
 
             ui.separator();
             model_plot
-            .show(ui, |plot_ui| { let plot_points: Vec<[f64; 2]> = measurement_points.index_axis(Axis(1), 0).into_iter()
+            .show(ui, |plot_ui| {let plot_points: Vec<[f64; 2]> = measurement_points.index_axis(Axis(1), 0).into_iter()
                 .zip(measurement_points.index_axis(Axis(1), 2).into_iter())
                 .map(|(x,z)| [*x,*z]).collect();
-                plot_ui.points(Points::new(plot_points).name("Measurement points").color(Color32::WHITE));
+                plot_ui.points(Points::new(plot_points).name("data points").color(Color32::WHITE));
 
                 for (i,cuboid_params) in cuboids_params.iter().enumerate() {
                     let cuboid = cuboid_params.cuboid();
