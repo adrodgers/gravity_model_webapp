@@ -148,46 +148,82 @@ impl Cuboid {
         vec![[verts[[0, 0]],verts[[0, 2]]],[verts[[1, 0]],verts[[1, 2]]],[verts[[6, 0]],verts[[6, 2]]],[verts[[4, 0]],verts[[4, 2]]],]
     }
 
-    // fn gravity(&self, position: &Array1<f64>) -> Array1<f64> {
-    //     let mut gravity: Array1<f64> = ndarray::Array::zeros(3);
-    //     let pos_neg: Array1<f64> = array![1., -1., 1., -1., -1., 1., -1., 1.];
-    //     for i in 0..8 {
-    //         let p_dash: Array1<f64> =
-    //             position * (1. + 1e-7) - self.vertices.index_axis(Axis(0), i).to_owned();
-    //         let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
-    //         gravity[0] += pos_neg[i]
-    //             * ((p_dash[1] * (r + p_dash[2]).ln()) + (p_dash[2] * (r + p_dash[1]).ln())
-    //                 - (p_dash[0] * ((p_dash[1] * p_dash[2]) / (r * p_dash[0])).atan()));
-    //         gravity[1] += pos_neg[i]
-    //             * ((p_dash[2] * (r + p_dash[0]).ln()) + (p_dash[0] * (r + p_dash[2]).ln())
-    //                 - (p_dash[1] * ((p_dash[0] * p_dash[2]) / (r * p_dash[1])).atan()));
-    //         gravity[2] += pos_neg[i]
-    //             * ((p_dash[0] * (r + p_dash[1]).ln()) + (p_dash[1] * (r + p_dash[0]).ln())
-    //                 - (p_dash[2] * ((p_dash[0] * p_dash[1]) / (r * p_dash[2])).atan()));
-    //     }
-    //     gravity * G * self.density
-    // }
+    fn gravity(&self, position: &Array1<f64>) -> Array1<f64> {
+        let mut gravity: Array1<f64> = ndarray::Array::zeros(3);
+        let pos_neg: Array1<f64> = array![1., -1., 1., -1., -1., 1., -1., 1.];
+        for i in 0..8 {
+            let p_dash: Array1<f64> =
+                position * (1. + 1e-7) - self.vertices.index_axis(Axis(0), i).to_owned();
+            let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
+            gravity[0] += pos_neg[i]
+                * ((p_dash[1] * (r + p_dash[2]).ln()) + (p_dash[2] * (r + p_dash[1]).ln())
+                    - (p_dash[0] * ((p_dash[1] * p_dash[2]) / (r * p_dash[0])).atan()));
+            gravity[1] += pos_neg[i]
+                * ((p_dash[2] * (r + p_dash[0]).ln()) + (p_dash[0] * (r + p_dash[2]).ln())
+                    - (p_dash[1] * ((p_dash[0] * p_dash[2]) / (r * p_dash[1])).atan()));
+            gravity[2] += pos_neg[i]
+                * ((p_dash[0] * (r + p_dash[1]).ln()) + (p_dash[1] * (r + p_dash[0]).ln())
+                    - (p_dash[2] * ((p_dash[0] * p_dash[1]) / (r * p_dash[2])).atan()));
+        }
+        gravity * G * self.density
+    }
 
-    // fn gravity_gradient(&self, position: &Array1<f64>) -> Array2<f64> {
-    //     let mut gravity_gradient: Array2<f64> = ndarray::Array::zeros((3, 3));
-    //     let pos_neg: Array1<f64> = array![1., -1., 1., -1., -1., 1., -1., 1.];
-    //     for i in 0..8 {
-    //         let p_dash: Array1<f64> =
-    //             position * (1. + 1e-7) - self.vertices.index_axis(Axis(0), i).to_owned();
-    //         let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
+    fn gravity_gradient(&self, position: &Array1<f64>) -> Array2<f64> {
+        let mut gravity_gradient: Array2<f64> = ndarray::Array::zeros((3, 3));
+        let pos_neg: Array1<f64> = array![1., -1., 1., -1., -1., 1., -1., 1.];
+        for i in 0..8 {
+            let p_dash: Array1<f64> =
+                position * (1. + 1e-7) - self.vertices.index_axis(Axis(0), i).to_owned();
+            let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
 
-    //         gravity_gradient[[0, 0]] +=
-    //             pos_neg[i] * -((p_dash[1] * p_dash[2]) / (r * p_dash[0])).atan();
-    //         gravity_gradient[[1, 1]] +=
-    //             pos_neg[i] * -((p_dash[0] * p_dash[2]) / (r * p_dash[1])).atan();
-    //         gravity_gradient[[2, 2]] +=
-    //             pos_neg[i] * -((p_dash[1] * p_dash[0]) / (r * p_dash[2])).atan();
-    //         gravity_gradient[[0, 1]] += pos_neg[i] * (r + p_dash[2]).ln();
-    //         gravity_gradient[[0, 2]] += pos_neg[i] * (r + p_dash[1]).ln();
-    //         gravity_gradient[[1, 2]] += pos_neg[i] * (r + p_dash[0]).ln();
-    //     }
-    //     gravity_gradient * G * self.density
-    // }
+            gravity_gradient[[0, 0]] +=
+                pos_neg[i] * -((p_dash[1] * p_dash[2]) / (r * p_dash[0])).atan();
+            gravity_gradient[[1, 1]] +=
+                pos_neg[i] * -((p_dash[0] * p_dash[2]) / (r * p_dash[1])).atan();
+            gravity_gradient[[2, 2]] +=
+                pos_neg[i] * -((p_dash[1] * p_dash[0]) / (r * p_dash[2])).atan();
+            gravity_gradient[[0, 1]] += pos_neg[i] * (r + p_dash[2]).ln();
+            gravity_gradient[[0, 2]] += pos_neg[i] * (r + p_dash[1]).ln();
+            gravity_gradient[[1, 2]] += pos_neg[i] * (r + p_dash[0]).ln();
+        }
+        gravity_gradient * G * self.density
+    }
+
+    pub fn gx (&self , position: &Array1<f64>) -> f64 {
+        let mut gx = 0.;
+        for i in 0..8 {
+            let p_dash: Array1<f64> =
+                position * (1. + 1e-7) - self.vertices.index_axis(Axis(0), i).to_owned();
+            // Only fetch relevant values once
+            let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
+            let sign = Cuboid::index_order()[i];
+            let x = p_dash[0];
+            let y = p_dash[1];
+            let z = p_dash[2];
+            gx += sign
+            * ((y * (r + z).ln()) + (z * (r + y).ln())
+                - (x * ((y * z) / (r * x)).atan()));
+        };
+        - gx * G * self.density
+    }
+
+    pub fn gy (&self , position: &Array1<f64>) -> f64 {
+        let mut gy = 0.;
+        for i in 0..8 {
+            let p_dash: Array1<f64> =
+                position * (1. + 1e-7) - self.vertices.index_axis(Axis(0), i).to_owned();
+            // Only fetch relevant values once
+            let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
+            let sign = Cuboid::index_order()[i];
+            let x = p_dash[0];
+            let y = p_dash[1];
+            let z = p_dash[2];
+            gy += sign
+            * ((z * (r + x).ln()) + (x * (r + z).ln())
+                - (y * ((x * z) / (r * y)).atan()));
+        };
+        - gy * G * self.density
+    }
 
     pub fn gz (&self , position: &Array1<f64>) -> f64 {
         let mut gz = 0.;
@@ -205,6 +241,86 @@ impl Cuboid {
                     - (z * ((x * y) / (r * z)).atan()));
         };
         - gz * G * self.density
+    }
+
+    pub fn gxx (&self , position: &Array1<f64>) -> f64 {
+        let mut gxx = 0.;
+        for i in 0..8 {
+            let p_dash: Array1<f64> =
+                position * (1. + 1e-7) - self.vertices.index_axis(Axis(0), i).to_owned();
+            // Only fetch relevant values once
+            let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
+            let sign = Cuboid::index_order()[i];
+            let x = p_dash[0];
+            let y = p_dash[1];
+            let z = p_dash[2];
+            gxx += sign * -((y * z) / (r * x)).atan()
+        };
+        gxx * G * self.density
+    }
+
+    pub fn gxy (&self , position: &Array1<f64>) -> f64 {
+        let mut gxy = 0.;
+        for i in 0..8 {
+            let p_dash: Array1<f64> =
+                position * (1. + 1e-7) - self.vertices.index_axis(Axis(0), i).to_owned();
+            // Only fetch relevant values once
+            let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
+            let sign = Cuboid::index_order()[i];
+            let x = p_dash[0];
+            let y = p_dash[1];
+            let z = p_dash[2];
+            gxy += sign * (r + z).ln()
+        };
+        gxy * G * self.density
+    }
+
+    pub fn gxz (&self , position: &Array1<f64>) -> f64 {
+        let mut gxz = 0.;
+        for i in 0..8 {
+            let p_dash: Array1<f64> =
+                position * (1. + 1e-7) - self.vertices.index_axis(Axis(0), i).to_owned();
+            // Only fetch relevant values once
+            let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
+            let sign = Cuboid::index_order()[i];
+            let x = p_dash[0];
+            let y = p_dash[1];
+            let z = p_dash[2];
+            gxz += sign * (r + y).ln()
+        };
+        gxz * G * self.density
+    }
+
+    pub fn gyy (&self , position: &Array1<f64>) -> f64 {
+        let mut gyy = 0.;
+        for i in 0..8 {
+            let p_dash: Array1<f64> =
+                position * (1. + 1e-7) - self.vertices.index_axis(Axis(0), i).to_owned();
+            // Only fetch relevant values once
+            let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
+            let sign = Cuboid::index_order()[i];
+            let x = p_dash[0];
+            let y = p_dash[1];
+            let z = p_dash[2];
+            gyy += sign * -((x * z) / (r * y)).atan()
+        };
+        gyy * G * self.density
+    }
+
+    pub fn gyz (&self , position: &Array1<f64>) -> f64 {
+        let mut gyz = 0.;
+        for i in 0..8 {
+            let p_dash: Array1<f64> =
+                position * (1. + 1e-7) - self.vertices.index_axis(Axis(0), i).to_owned();
+            // Only fetch relevant values once
+            let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
+            let sign = Cuboid::index_order()[i];
+            let x = p_dash[0];
+            let y = p_dash[1];
+            let z = p_dash[2];
+            gyz += sign * (r + x).ln()
+        };
+        gyz * G * self.density
     }
 
     pub fn gzz (&self , position: &Array1<f64>) -> f64 {

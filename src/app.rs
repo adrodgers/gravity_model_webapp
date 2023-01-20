@@ -1,4 +1,4 @@
-use ndarray::{arr1, Array1, Array2, Axis, Array};
+use ndarray::{Array1, Array2, Axis};
 use crate::cuboid::Cuboid;
 use egui::plot::{Line, Plot, PlotPoints, Polygon, LinkedAxisGroup, Points};
 
@@ -153,7 +153,7 @@ impl eframe::App for TemplateApp {
 
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.heading("Cuboid Parameters");
+                ui.heading("Cuboid Settings");
                 if ui.button("reset").clicked() {
                     *cuboid_params = CuboidParameters::default();
                 }
@@ -202,13 +202,25 @@ impl eframe::App for TemplateApp {
             });
             
             ui.separator();
-            ui.heading("Data Parameters");
+            ui.horizontal(|ui| {
+                ui.heading("Measurement Settings");
+                if ui.button("reset").clicked() {
+                    *measurement_params = MeasurementParameters::default();
+                }
+            });
             egui::CollapsingHeader::new("measurement")
                 .show(ui, |ui| {
                     egui::ComboBox::from_label("data type")
                         .selected_text(format!("{:?}", measurement_params.measurement_type))
                         .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut measurement_params.measurement_type, DataType::Gx, "gx");
+                            ui.selectable_value(&mut measurement_params.measurement_type, DataType::Gy, "gy");
                             ui.selectable_value(&mut measurement_params.measurement_type, DataType::Gz, "gz");
+                            ui.selectable_value(&mut measurement_params.measurement_type, DataType::Gxx, "gxx");
+                            ui.selectable_value(&mut measurement_params.measurement_type, DataType::Gxy, "gxy");
+                            ui.selectable_value(&mut measurement_params.measurement_type, DataType::Gxz, "gxz");
+                            ui.selectable_value(&mut measurement_params.measurement_type, DataType::Gyy, "gyy");
+                            ui.selectable_value(&mut measurement_params.measurement_type, DataType::Gyz, "gyz");
                             ui.selectable_value(&mut measurement_params.measurement_type, DataType::Gzz, "gzz");
                         }
                     );
@@ -265,8 +277,29 @@ impl eframe::App for TemplateApp {
             // }
             // let polygon = Polygon::new(PlotPoints::from(cuboid.vertices_xz()));
             match &measurement_params.measurement_type {
+                DataType::Gx => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += cuboid.gx(&point.to_owned())
+                }},
+                DataType::Gy => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += cuboid.gy(&point.to_owned())
+                }},
                 DataType::Gz => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
                     data[i] += cuboid.gz(&point.to_owned())
+                }},
+                DataType::Gxx => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += cuboid.gxx(&point.to_owned())
+                }},
+                DataType::Gxy => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += cuboid.gxy(&point.to_owned())
+                }},
+                DataType::Gxz => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += cuboid.gxz(&point.to_owned())
+                }},
+                DataType::Gyy => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += cuboid.gyy(&point.to_owned())
+                }},
+                DataType::Gyz => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += cuboid.gyz(&point.to_owned())
                 }},
                 DataType::Gzz => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
                     data[i] += cuboid.gzz(&point.to_owned())
