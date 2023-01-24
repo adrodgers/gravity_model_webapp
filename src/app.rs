@@ -1,44 +1,26 @@
+use std::{collections::HashMap};
+
 use ndarray::{Array1, Array2, Axis};
-use crate::cuboid::{Cuboid, self};
-use egui::{plot::{Line, Plot, PlotPoints, Polygon, LinkedAxisGroup, Points, Legend}, Color32};
+use crate::cuboid::{Cuboid, DataType, GravityObject};
+use egui::{plot::{Line, Plot, PlotPoints, Polygon, LinkedAxisGroup, Points, Legend, LineStyle, PlotPoint}, Color32, Key};
 
-
+const MAX_CUBOIDS: usize = 10;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-
 pub struct TemplateApp {
-    // Example stuff:
-    // label: String,
-    
-    // this how you opt-out of serialization of a member
-    // #[serde(skip)]
-    // value: f32,
-    #[serde(skip)]
-    // value_2: f32
-    // cuboid_params: CuboidParameters
-    // cuboids: Vec<Cuboid>,
-    cuboids_params: Vec<CuboidParameters>,
-    current_cuboid_index: usize,
-    #[serde(skip)]
+    cuboids: HashMap<String,Cuboid>,
+    current_cuboid_id: String,
     measurement_params: MeasurementParameters,
     #[serde(skip)]
-    group: LinkedAxisGroup,
+    groups: Vec<LinkedAxisGroup>,
+    add_cuboid_id: String,
+    #[serde(skip)]
+    colours: Box<dyn Iterator<Item = Color32>>,
+
 }
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct CuboidParameters {
-    pub x_length: f64,
-    pub y_length: f64,
-    pub z_length: f64,
-    pub x_centroid: f64,
-    pub y_centroid: f64,
-    pub z_centroid: f64, 
-    pub x_rotation: f64,
-    pub y_rotation: f64,
-    pub z_rotation: f64,
-    pub density: f64
-}
+
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct MeasurementParameters {
     measurement_type: DataType,
@@ -46,12 +28,13 @@ pub struct MeasurementParameters {
     x_end: f64,
     n: usize,
     y: f64,
-    z: f64
+    z: f64,
+    gradient: f64
 }
 
 impl Default for MeasurementParameters {
     fn default() -> Self {
-        Self { measurement_type: DataType::Gz, x_start: -10., x_end: 10., n: 200, y: 0., z: 0.25 }
+        Self { measurement_type: DataType::Gz, x_start: -10., x_end: 10., n: 200, y: 0., z: 0.25, gradient: 0. }
     }
 }
 
@@ -60,57 +43,23 @@ impl MeasurementParameters {
         let x: Array1<f64> = ndarray::Array::linspace(self.x_start, self.x_end, self.n);
         let mut points: Array2<f64> = ndarray::Array::zeros((self.n, 3));
         for i in 0..x.len() {
-            points[[i, 0]] = x[i];
+            points[[i, 0]] = x[i] ;
             points[[i, 1]] = self.y;
-            points[[i, 2]] = self.z;
+            points[[i, 2]] = self.z + self.gradient*x[i];
         }
-        points*1.00001
+        points*1.0001
 }
-}
-#[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
-enum DataType {
-    Gx,
-    Gy,
-    Gz,
-    Gxx,
-    Gxy,
-    Gxz,
-    Gyy,
-    Gyz,
-    Gzz
-}
-
-impl Default for CuboidParameters {
-    fn default() -> Self {
-        Self { x_length: 1.,
-            y_length: 1.,
-            z_length: 1.,
-            x_centroid: 0.,
-            y_centroid: 0.,
-            z_centroid: -0.5,
-            x_rotation: 0.,
-            y_rotation: 0.,
-            z_rotation: 0.,
-            density: -2000.}
-    }
-}
-
-impl CuboidParameters {
-    pub fn cuboid(&self) -> Cuboid {
-        Cuboid::new_from_lengths([self.x_centroid,self.y_centroid,self.z_centroid],
-            [self.x_length,self.y_length,self.z_length], self.density)
-    }
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
-            // cuboid_params: CuboidParameters::default(),
-            // cuboids: vec![Cuboid::default()],
-            cuboids_params: vec![CuboidParameters::default()],
+            cuboids: HashMap::new(),
             measurement_params: MeasurementParameters::default(),
-            current_cuboid_index: 0,
-            group: LinkedAxisGroup::new(true, false),
+            current_cuboid_id: String::new(),
+            groups: vec![LinkedAxisGroup::new(true, false),LinkedAxisGroup::new(false, true)],
+            add_cuboid_id: String::new(),
+            colours: Box::new(vec![Color32::RED,Color32::BLUE,Color32::YELLOW,Color32::GREEN,Color32::BROWN].into_iter().cycle())
         }
     }
 }
@@ -140,9 +89,8 @@ impl eframe::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // let Self { cuboid_params } = self;
-        let Self { cuboids_params, group, measurement_params, current_cuboid_index } = self;
-        let colour_vec = vec![Color32::RED,Color32::BLUE,Color32::YELLOW,Color32::GREEN,Color32::BROWN];
+        let Self { cuboids, groups, measurement_params, current_cuboid_id, add_cuboid_id, colours } = self;
+
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
         // Tip: a good default choice is to just keep the `CentralPanel`.
@@ -164,81 +112,84 @@ impl eframe::App for TemplateApp {
 
             ui.horizontal(|ui| {
                 ui.heading("Model Settings");
-                if ui.button("reset all").clicked() {
-                    for cuboid_params in cuboids_params.iter_mut() {
-                        *cuboid_params = CuboidParameters::default();
-                    }
-                }
+                // if ui.button("reset all").clicked() {
+                //     for (_,cuboid) in cuboids.iter_mut() {
+                //         *cuboid = Cuboid::default();
+                //     }
+                // }
             });
+            ui.text_edit_singleline(add_cuboid_id);
             if ui.button("Add cuboid").clicked() {
-                if cuboids_params.len() < 5 {
-                    cuboids_params.push(CuboidParameters::default());
-                }
-                if *current_cuboid_index < 4 {
-                    *current_cuboid_index += 1;
+                if cuboids.len() < MAX_CUBOIDS {
+                    cuboids.insert(add_cuboid_id.to_string(), Cuboid {id: add_cuboid_id.to_string(), colour: colours.next().unwrap(), ..Default::default()});
+                    *current_cuboid_id = add_cuboid_id.to_string();
                 }
             }
             if ui.button("Remove cuboid").clicked() {
-                if cuboids_params.len() > 1 {
-                    cuboids_params.remove(*current_cuboid_index);
-                }
-                if *current_cuboid_index > 0 {
-                    *current_cuboid_index -= 1;
+                if cuboids.len() > 1 {
+                    println!("Remove: {}",&current_cuboid_id);
+                    cuboids.remove(&*current_cuboid_id);
+                    *current_cuboid_id = cuboids.keys().next().unwrap().to_string();
                 }
             }
             egui::ComboBox::from_label("Edit cuboid")
-                .selected_text(format!("{:?}", current_cuboid_index))
+                .selected_text(current_cuboid_id.to_string())
                 .show_ui(ui, |ui| {
-                    for i in 0..cuboids_params.len() {
-                        ui.selectable_value(current_cuboid_index, i as usize, i.to_string());
+                    for key in cuboids.keys() {
+                        ui.selectable_value(current_cuboid_id, key.to_string(), key);
                     }
                 }
             );
-            if *current_cuboid_index > cuboids_params.len() - 1 {
-                *current_cuboid_index = 0;
+            if ui.button("reset").clicked() {
+                let cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
+                *cuboid = Cuboid {id: cuboid.id.to_owned(), colour: cuboid.colour,..Default::default()};
             }
-            egui::CollapsingHeader::new("position")
-                .show(ui, |ui| {
-                    ui.label("x centroid");
-                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].x_centroid, -50.0..=50.0).text("m"));
 
-                    ui.label("y centroid");
-                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].y_centroid, -50.0..=50.0).text("m"));
-                    
-                    ui.label("z centroid");
-                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].z_centroid, -25.0..=25.0).text("m"));
-            });
-            egui::CollapsingHeader::new("volume")
-                .show(ui, |ui| {
-                    ui.label("x length");
-                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].x_length, 0.1..=100.0).text("m"));
-                    
-                    ui.label("y length");
-                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].y_length, 0.1..=100.0).text("m"));
+            if !cuboids.is_empty() {
+                let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
+                egui::CollapsingHeader::new("position")
+                    .show(ui, |ui| {
+                        ui.label("x centroid");
+                        ui.add(egui::Slider::new(&mut current_cuboid.x_centroid, -50.0..=50.0).text("m"));
 
-                    ui.label("z length");
-                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].z_length, 0.1..=25.0).text("m"));
-                    ui.separator();
-                    ui.label(format!("Volume: {}",cuboids_params[*current_cuboid_index].cuboid().volume()));
-            });
-            egui::CollapsingHeader::new("density")
-                .show(ui, |ui| {
-                    ui.add(egui::Slider::new(&mut cuboids_params[*current_cuboid_index].density, -3000.0..=22590.).text("kg/m^3"));
-                    if ui.button("soil void").clicked() {
-                        cuboids_params[*current_cuboid_index].density = -1800.;
-                    }
-                    if ui.button("concrete").clicked() {
-                        cuboids_params[*current_cuboid_index].density = 2000.;
-                    }
-                    if ui.button("lead").clicked() {
-                        cuboids_params[*current_cuboid_index].density = 11340.;
-                    }
-                    if ui.button("tungsten").clicked() {
-                        cuboids_params[*current_cuboid_index].density = 19300.;
-                    }
-                    ui.separator();
-                    ui.label(format!("Mass: {}",cuboids_params[*current_cuboid_index].cuboid().mass()));
-            });
+                        ui.label("y centroid");
+                        ui.add(egui::Slider::new(&mut current_cuboid.y_centroid, -50.0..=50.0).text("m"));
+                        
+                        ui.label("z centroid");
+                        ui.add(egui::Slider::new(&mut current_cuboid.z_centroid, -25.0..=25.0).text("m"));
+                });
+                egui::CollapsingHeader::new("volume")
+                    .show(ui, |ui| {
+                        ui.label("x length");
+                        ui.add(egui::Slider::new(&mut current_cuboid.x_length, 0.1..=100.0).text("m"));
+                        
+                        ui.label("y length");
+                        ui.add(egui::Slider::new(&mut current_cuboid.y_length, 0.1..=100.0).text("m"));
+
+                        ui.label("z length");
+                        ui.add(egui::Slider::new(&mut current_cuboid.z_length, 0.1..=25.0).text("m").drag_value_speed(0.1));
+                        ui.separator();
+                        ui.label(format!("Volume: {}",current_cuboid.volume()));
+                });
+                egui::CollapsingHeader::new("density")
+                    .show(ui, |ui| {
+                        ui.add(egui::Slider::new(&mut current_cuboid.density, -3000.0..=22590.).text("kg/m^3"));
+                        if ui.button("soil void").clicked() {
+                            current_cuboid.density = -1800.;
+                        }
+                        if ui.button("concrete").clicked() {
+                            current_cuboid.density = 2000.;
+                        }
+                        if ui.button("lead").clicked() {
+                            current_cuboid.density = 11340.;
+                        }
+                        if ui.button("tungsten").clicked() {
+                            current_cuboid.density = 19300.;
+                        }
+                        ui.separator();
+                        ui.label(format!("Mass: {}",current_cuboid.mass()));      
+                });
+            }
             
             ui.separator();
             ui.horizontal(|ui| {
@@ -273,17 +224,9 @@ impl eframe::App for TemplateApp {
                     ui.add(egui::Slider::new(&mut measurement_params.y, -50.0..=50.));
                     ui.label("z");
                     ui.add(egui::Slider::new(&mut measurement_params.z, -25.0..=25.));
+                    ui.label("gradient");
+                    ui.add(egui::Slider::new(&mut measurement_params.gradient, -0.5..=0.5));
             });
-            // *cuboids = vec![];
-            // for params in cuboids_params {
-            //     cuboids.push(Cuboid::new_from_lengths([params.x_centroid,params.y_centroid,params.z_centroid],
-            //         [params.x_length,params.y_length,params.z_length], params.density))
-            // }
-            
-            // if ui.button("vertices").clicked() {
-            //     println!("{:?}",cuboid.vertices);
-            //     println!("{:?}",cuboid.vertices_xz());
-            // }
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
             ui.hyperlink("https://github.com/adrodgers/gravity_model_webapp");
@@ -308,118 +251,150 @@ impl eframe::App for TemplateApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("Gravity Model");
+            // ui.heading("Gravity Model Builder");
             let measurement_points = measurement_params.points();
-            let mut data: Vec<Array1<f64>> = vec![Array1::zeros(measurement_points.len());cuboids_params.len()];
-            let mut data_total: Array1<f64> = Array1::zeros(measurement_points.len());
             let x = measurement_points.index_axis(Axis(1),0);
-            // if ui.button("x").clicked() {
-            //     println!("{:?}",x);
-            // }
-            // let polygon = Polygon::new(PlotPoints::from(cuboid.vertices_xz()));
-            for (j,cuboid_params) in cuboids_params.iter().enumerate() {
-                let cuboid = cuboid_params.cuboid();
-                match &measurement_params.measurement_type {
-                    DataType::Gx => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
-                        data[j][i] += cuboid.gx(&point.to_owned())
-                    }},
-                    DataType::Gy => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
-                        data[j][i] += cuboid.gy(&point.to_owned())
-                    }},
-                    DataType::Gz => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
-                        data[j][i] += cuboid.gz(&point.to_owned())
-                    }},
-                    DataType::Gxx => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
-                        data[j][i] += cuboid.gxx(&point.to_owned())
-                    }},
-                    DataType::Gxy => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
-                        data[j][i] += cuboid.gxy(&point.to_owned())
-                    }},
-                    DataType::Gxz => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
-                        data[j][i] += cuboid.gxz(&point.to_owned())
-                    }},
-                    DataType::Gyy => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
-                        data[j][i] += cuboid.gyy(&point.to_owned())
-                    }},
-                    DataType::Gyz => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
-                        data[j][i] += cuboid.gyz(&point.to_owned())
-                    }},
-                    DataType::Gzz => {for (i, point )in measurement_points.axis_iter(Axis(0)).enumerate() {
-                        data[j][i] += cuboid.gzz(&point.to_owned())
-                    }},
-                    _ => {}
-                }
-                data_total = data_total + &data[j];
-            }
             
-            // if ui.button("gz").clicked() {
-            //     println!("{:?}",gz);
-            // }
+            // Associate colour with a cuboid. Also give cuboid a name id.
             let data_plot = Plot::new("gravity")
             .view_aspect(2.0)
-            .link_axis(group.clone())
+            .link_axis(groups[0].clone())
             .include_x(-10.)
             .include_x(10.)
             .include_y(0.)
             .width(720.)
             .legend(Legend::default());
 
-            let model_plot = Plot::new("underground")
-            .view_aspect(2.0)
-            .data_aspect(1.0)
-            .link_axis(group.clone())
-            .include_x(-10.)
-            .include_x(10.)
-            .include_y(2.)
-            .include_y(-10.)
-            .width(720.)
-            .legend(Legend::default());
+            let edit_mode = ctx.input().key_down(Key::P) || ctx.input().key_down(Key::L);
 
-            let data_2d: Vec<_> = x.into_iter().zip(data_total.into_iter()).map(|(x,val)| {
-            let scaling = match measurement_params.measurement_type {
-                DataType::Gx | DataType::Gy | DataType::Gz => {1E8},
-                _ => {1E9}
-            };
-            // data_total = data_total + datum * scaling;
-            [*x,val*scaling]}).collect();
-            let data_total_line = Line::new(data_2d);
+            let model_plot_xz = Plot::new("underground_xz")
+                .view_aspect(2.0)
+                .data_aspect(1.0)
+                .link_axis(groups[0].clone())
+                .link_axis(groups[1].clone())
+                .include_x(-10.)
+                .include_x(10.)
+                .include_y(2.)
+                .include_y(-10.)
+                .width(720.)
+                .legend(Legend::default())
+                .allow_boxed_zoom(if edit_mode {false} else {true})
+                .allow_drag(if edit_mode {false} else {true});
+
+            let model_plot_yz = Plot::new("underground_xy")
+                .view_aspect(2.0)
+                .data_aspect(1.0)
+                .link_axis(groups[1].clone())
+                .include_x(-10.)
+                .include_x(10.)
+                .include_y(2.)
+                .include_y(-10.)
+                .width(720.)
+                .legend(Legend::default())
+                .allow_boxed_zoom(if edit_mode {false} else {true})
+                .allow_drag(if edit_mode {false} else {true});
             
+            let mut data_total: Array1<f64> = Array1::zeros(measurement_points.len_of(Axis(0)));
             data_plot
-            .show(ui, |plot_ui| {plot_ui.line(data_total_line.color(Color32::WHITE).name("data total")); 
-                for (i,datum) in data.iter().enumerate() {
-                    let data_2d: Vec<_> = x.into_iter().zip(datum.into_iter()).map(|(x,val)| {
-                    let scaling = match measurement_params.measurement_type {
-                        DataType::Gx | DataType::Gy | DataType::Gz => {1E8},
-                        _ => {1E9}
-                    };
-                    [*x,val*scaling]}).collect();
+            .show(ui, |plot_ui| {
+                for (key,cuboid) in cuboids.iter() {
+                    let data = cuboid.calculate(&measurement_params.measurement_type,&measurement_points);
+                    let data_2d: Vec<_> = x.into_iter().zip(data.iter()).map(|(x,val)| {
+                    [*x,*val]}).collect();
                     let line = Line::new(data_2d);
-                    plot_ui.line(line.name(format!("cuboid {i}")).color(colour_vec[i]));
+                    plot_ui.line(line.name(key).color(cuboid.colour));
+                    data_total = data_total + &data;
                 }
+                let data_2d: Vec<_> = x.into_iter().zip(data_total.into_iter()).map(|(x,val)| {
+                [*x,val]}).collect();
+                let data_total_line = Line::new(data_2d);
+                plot_ui.line(data_total_line.name("Combined").color(Color32::WHITE).style(LineStyle::dashed_loose()));
             });
 
             ui.separator();
-            model_plot
-            .show(ui, |plot_ui| {let plot_points: Vec<[f64; 2]> = measurement_points.index_axis(Axis(1), 0).into_iter()
-                .zip(measurement_points.index_axis(Axis(1), 2).into_iter())
-                .map(|(x,z)| [*x,*z]).collect();
-                plot_ui.points(Points::new(plot_points).name("data points").color(Color32::WHITE));
 
-                for (i,cuboid_params) in cuboids_params.iter().enumerate() {
-                    let cuboid = cuboid_params.cuboid();
-                    let polygon = Polygon::new(PlotPoints::from(cuboid.vertices_xz()));
-                    plot_ui.polygon(polygon.name(format!("cuboid {i}")).color(colour_vec[i]));
-                }
+            ui.horizontal(|ui|{
+                model_plot_xz
+                .show(ui, |plot_ui| {
+                    let plot_points: Vec<[f64; 2]> = measurement_points.index_axis(Axis(1), 0).into_iter()
+                    .zip(measurement_points.index_axis(Axis(1), 2).into_iter())
+                    .map(|(x,z)| [*x,*z]).collect();
+                    plot_ui.points(Points::new(plot_points).name("data points").color(Color32::WHITE));
+
+                    for (key,cuboid) in cuboids.iter() {
+                        let polygon = Polygon::new(PlotPoints::from(cuboid.vertices_xz()));
+                        plot_ui.polygon(polygon.name(key).color(cuboid.colour));
+                    }
+
+                    if ctx.input().key_down(Key::L) && plot_ui.plot_hovered() {
+                        let drag_delta = plot_ui.pointer_coordinate_drag_delta();
+                        if !cuboids.is_empty() {
+                            let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
+                            if current_cuboid.x_length + drag_delta.x as f64 > 0. {
+                                current_cuboid.x_length += drag_delta.x as f64;
+                            }
+                            
+                            if current_cuboid.z_length + drag_delta.y as f64 > 0. {
+                                current_cuboid.z_length += drag_delta.y as f64;
+                            }
+                        }
+                    }
+
+                    if ctx.input().key_down(Key::P) && plot_ui.plot_hovered() {
+                        let position = plot_ui.pointer_coordinate().unwrap_or(PlotPoint {x: 0., y: 0.}).to_vec2();
+                        if !cuboids.is_empty() {
+                            let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
+                            current_cuboid.x_centroid = position.x as f64;
+                            current_cuboid.z_centroid = position.y as f64;
+                        }
+                    }
+                });
+
+                model_plot_yz
+                .show(ui, |plot_ui| {
+                    let plot_points: Vec<[f64; 2]> = measurement_points.index_axis(Axis(1), 1).into_iter()
+                    .zip(measurement_points.index_axis(Axis(1), 2).into_iter())
+                    .map(|(x,z)| [*x,*z]).collect();
+                    plot_ui.points(Points::new(plot_points).name("data points").color(Color32::WHITE));
+
+                    for (key,cuboid) in cuboids.iter() {
+                        let polygon = Polygon::new(PlotPoints::from(cuboid.vertices_yz()));
+                        plot_ui.polygon(polygon.name(key).color(cuboid.colour));
+                    }
+
+                    if ctx.input().key_down(Key::L) && plot_ui.plot_hovered() {
+                        let drag_delta = plot_ui.pointer_coordinate_drag_delta();
+                        if !cuboids.is_empty() {
+                            let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
+                            if current_cuboid.y_length + drag_delta.x as f64 > 0. {
+                                current_cuboid.y_length += drag_delta.x as f64;
+                            }
+                            
+                            if current_cuboid.z_length + drag_delta.y as f64 > 0. {
+                                current_cuboid.z_length += drag_delta.y as f64;
+                            }
+                        }
+                    }
+
+                    if ctx.input().key_down(Key::P) && plot_ui.plot_hovered() {
+                        let position = plot_ui.pointer_coordinate().unwrap_or(PlotPoint {x: 0., y: 0.}).to_vec2();
+                        if !cuboids.is_empty() {
+                            let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
+                            current_cuboid.y_centroid = position.x as f64;
+                            current_cuboid.z_centroid = position.y as f64;
+                        }
+                    }
+                });
+
             });
+            if ui.button("verts").clicked() {
+                for (_,cuboid) in cuboids {
+                    println!("{:?}",cuboid.vertices());
+                    println!("{:?}",cuboid.vertices_xz());
+                    println!("{:?}",cuboid.vertices_yz());
+                }
+                
+            }
         });
-
-        // if true {
-        //     egui::Window::new("Window").show(ctx, |ui| {
-        //         ui.label("Windows can be moved by dragging them.");
-        //         ui.label("They are automatically sized based on contents.");
-        //         ui.label("You can turn on resizing and scrolling if you like.");
-        //         ui.label("You would normally choose either panels OR windows.");
-        //     });
-        // }
     }
 }
