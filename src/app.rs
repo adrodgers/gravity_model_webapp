@@ -281,7 +281,7 @@ impl eframe::App for TemplateApp {
                 .allow_boxed_zoom(if edit_mode {false} else {true})
                 .allow_drag(if edit_mode {false} else {true});
 
-            let model_plot_yz = Plot::new("underground_xy")
+            let model_plot_yz = Plot::new("underground_yz")
                 .view_aspect(2.0)
                 .data_aspect(1.0)
                 .link_axis(groups[1].clone())
@@ -293,24 +293,74 @@ impl eframe::App for TemplateApp {
                 .legend(Legend::default())
                 .allow_boxed_zoom(if edit_mode {false} else {true})
                 .allow_drag(if edit_mode {false} else {true});
+
+            let model_plot_xy = Plot::new("underground_xy")
+                .view_aspect(2.0)
+                .data_aspect(1.0)
+                // .link_axis(groups[1].clone())
+                .include_x(-10.)
+                .include_x(10.)
+                .include_y(2.)
+                .include_y(-10.)
+                .width(720.)
+                .legend(Legend::default())
+                .allow_boxed_zoom(if edit_mode {false} else {true})
+                .allow_drag(if edit_mode {false} else {true});
             
             let mut data_total: Array1<f64> = Array1::zeros(measurement_points.len_of(Axis(0)));
-            data_plot
-            .show(ui, |plot_ui| {
-                for (key,cuboid) in cuboids.iter() {
-                    let data = cuboid.calculate(&measurement_params.measurement_type,&measurement_points);
-                    let data_2d: Vec<_> = x.into_iter().zip(data.iter()).map(|(x,val)| {
-                    [*x,*val]}).collect();
-                    let line = Line::new(data_2d);
-                    plot_ui.line(line.name(key).color(cuboid.colour));
-                    data_total = data_total + &data;
-                }
-                let data_2d: Vec<_> = x.into_iter().zip(data_total.into_iter()).map(|(x,val)| {
-                [*x,val]}).collect();
-                let data_total_line = Line::new(data_2d);
-                plot_ui.line(data_total_line.name("Combined").color(Color32::WHITE).style(LineStyle::dashed_loose()));
-            });
+            ui.horizontal(|ui| {
+                data_plot
+                .show(ui, |plot_ui| {
+                    for (key,cuboid) in cuboids.iter() {
+                        let data = cuboid.calculate(&measurement_params.measurement_type,&measurement_points);
+                        let data_2d: Vec<_> = x.into_iter().zip(data.iter()).map(|(x,val)| {
+                        [*x,*val]}).collect();
+                        let line = Line::new(data_2d);
+                        plot_ui.line(line.name(key).color(cuboid.colour));
+                        data_total = data_total + &data;
+                    }
+                    let data_2d: Vec<_> = x.into_iter().zip(data_total.into_iter()).map(|(x,val)| {
+                    [*x,val]}).collect();
+                    let data_total_line = Line::new(data_2d);
+                    plot_ui.line(data_total_line.name("Combined").color(Color32::WHITE).style(LineStyle::dashed_loose()));
+                });
 
+                model_plot_xy
+                .show(ui, |plot_ui| {
+                    let plot_points: Vec<[f64; 2]> = measurement_points.index_axis(Axis(1), 0).into_iter()
+                    .zip(measurement_points.index_axis(Axis(1), 1).into_iter())
+                    .map(|(x,z)| [*x,*z]).collect();
+                    plot_ui.points(Points::new(plot_points).name("data points").color(Color32::WHITE));
+
+                    for (key,cuboid) in cuboids.iter() {
+                        let polygon = Polygon::new(PlotPoints::from(cuboid.vertices_xy()));
+                        plot_ui.polygon(polygon.name(key).color(cuboid.colour));
+                    }
+
+                    if ctx.input().key_down(Key::L) && plot_ui.plot_hovered() {
+                        let drag_delta = plot_ui.pointer_coordinate_drag_delta();
+                        if !cuboids.is_empty() {
+                            let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
+                            if current_cuboid.x_length + drag_delta.x as f64 > 0. {
+                                current_cuboid.x_length += drag_delta.x as f64;
+                            }
+                            
+                            if current_cuboid.y_length + drag_delta.y as f64 > 0. {
+                                current_cuboid.y_length += drag_delta.y as f64;
+                            }
+                        }
+                    }
+
+                    if ctx.input().key_down(Key::P) && plot_ui.plot_hovered() {
+                        let position = plot_ui.pointer_coordinate().unwrap_or(PlotPoint {x: 0., y: 0.}).to_vec2();
+                        if !cuboids.is_empty() {
+                            let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
+                            current_cuboid.x_centroid = position.x as f64;
+                            current_cuboid.y_centroid = position.y as f64;
+                        }
+                    }
+                });
+            });
             ui.separator();
 
             ui.horizontal(|ui|{
@@ -386,12 +436,15 @@ impl eframe::App for TemplateApp {
                     }
                 });
 
+                
+
             });
             if ui.button("verts").clicked() {
                 for (_,cuboid) in cuboids {
                     println!("{:?}",cuboid.vertices());
                     println!("{:?}",cuboid.vertices_xz());
                     println!("{:?}",cuboid.vertices_yz());
+                    println!("{:?}",cuboid.vertices_xy());
                 }
                 
             }

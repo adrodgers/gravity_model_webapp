@@ -383,6 +383,11 @@ impl Cuboid {
         vec![[verts[[0, 1]],verts[[0, 2]]],[verts[[1, 1]],verts[[1, 2]]],[verts[[2, 1]],verts[[2, 2]]],[verts[[3, 1]],verts[[3, 2]]],]
     }
 
+    pub fn vertices_xy(&self) -> Vec<[f64;2]> {
+        let verts = self.vertices();
+        vec![[verts[[0, 0]],verts[[0, 1]]],[verts[[2, 0]],verts[[2, 1]]],[verts[[5, 0]],verts[[5, 1]]],[verts[[7, 0]],verts[[7, 1]]],]
+    }
+
 }
 
 impl fmt::Display for Cuboid {
