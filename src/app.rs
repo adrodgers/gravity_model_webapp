@@ -5,15 +5,12 @@ use std::{
 
 use crate::gravity_objects::{Cuboid, DataType, GravityCalc, GravityInfo, GravityObject, Sphere};
 use egui::{
-    plot::{
-        Legend, Line, LineStyle, LinkedAxisGroup, Plot, PlotPoint, PlotPoints, PlotUi, Points,
-        Polygon,
-    },
+    plot::{Legend, Line, LineStyle, LinkedAxisGroup, Plot, PlotPoints, PlotUi, Points, Polygon},
     Color32, Key,
 };
 use ndarray::{Array1, Array2, Axis};
 
-const MAX_OBJECTS: usize = 10;
+const MAX_OBJECTS: usize = 100;
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct Model {
     objects: BTreeMap<String, Option<GravityObject>>,
@@ -49,7 +46,7 @@ impl Model {
 
     pub fn number_objects_selected(&self) -> u128 {
         let mut num_selected = 0;
-        for (id, object) in self.objects.iter() {
+        for (_, object) in self.objects.iter() {
             match object {
                 Some(obj) => match obj {
                     GravityObject::Cuboid(cuboid) => {
@@ -69,6 +66,34 @@ impl Model {
         num_selected
     }
 
+    pub fn selected_object_ids(&self) -> Vec<String> {
+        let mut selected_object_ids = vec![];
+        for (_, object) in self.objects.iter() {
+            match object {
+                Some(obj) => {
+                    match obj {
+                        GravityObject::Cuboid(cuboid) => {
+                            if cuboid.is_selected {
+                                selected_object_ids.push(cuboid.id.to_string());
+                            } else {
+                                // cuboid.is_selected = false;
+                            }
+                        }
+                        GravityObject::Sphere(sphere) => {
+                            if sphere.is_selected {
+                                selected_object_ids.push(sphere.id.to_string());
+                            } else {
+                                // cuboid.is_selected = false;
+                            }
+                        }
+                    }
+                }
+                None => {}
+            }
+        }
+        selected_object_ids
+    }
+
     // pub fn object_centroids(&self) -> Vec<Array1<f64>> {
     //     let mut centroids= vec![];
     //     for (id,object) in self.objects.iter() {
@@ -86,7 +111,7 @@ impl Model {
     // }
 
     pub fn select_by_click_xz(&mut self, plot_ui: &mut PlotUi) {
-        for (id, object) in self.objects.iter_mut() {
+        for (_, object) in self.objects.iter_mut() {
             let pointer_pos = plot_ui.pointer_coordinate().unwrap();
             match object {
                 Some(obj) => {
@@ -117,6 +142,86 @@ impl Model {
                 }
                 None => {}
             }
+        }
+    }
+
+    fn translate_selected(&mut self, plot_ui: &mut PlotUi) {
+        for (_, object) in self.objects.iter_mut() {
+            let pointer_delta = plot_ui.pointer_coordinate_drag_delta();
+            match object {
+                Some(obj) => {
+                    match obj {
+                        GravityObject::Cuboid(cuboid) => {
+                            if cuboid.is_selected {
+                                cuboid.x_centroid += pointer_delta.x as f64;
+                                cuboid.z_centroid += pointer_delta.y as f64;
+                            } else {
+                                // cuboid.is_selected = false;
+                            }
+                        }
+                        GravityObject::Sphere(sphere) => {
+                            if sphere.is_selected {
+                                sphere.x_centroid += pointer_delta.x as f64;
+                                sphere.z_centroid += pointer_delta.y as f64;
+                            } else {
+                                // cuboid.is_selected = false;
+                            }
+                        }
+                    }
+                }
+                None => {}
+            }
+        }
+    }
+
+    fn scale_selected(&mut self, plot_ui: &mut PlotUi) {
+        for (_, object) in self.objects.iter_mut() {
+            let pointer_delta = plot_ui.pointer_coordinate_drag_delta();
+            match object {
+                Some(obj) => {
+                    match obj {
+                        GravityObject::Cuboid(cuboid) => {
+                            if cuboid.is_selected {
+                                if (cuboid.x_length + pointer_delta.x as f64) > 0. {
+                                    cuboid.x_length += pointer_delta.x as f64;
+                                }
+                                if (cuboid.z_length + pointer_delta.y as f64) > 0. {
+                                    cuboid.z_length += pointer_delta.y as f64;
+                                }
+                            } else {
+                                // cuboid.is_selected = false;
+                            }
+                        }
+                        GravityObject::Sphere(sphere) => {
+                            if sphere.is_selected {
+                                if (sphere.radius + pointer_delta.y as f64) > 0. {
+                                    sphere.radius += pointer_delta.y as f64;
+                                }
+                            } else {
+                                // cuboid.is_selected = false;
+                            }
+                        }
+                    }
+                }
+                None => {}
+            }
+        }
+    }
+
+    pub fn copy_selected(&mut self) {
+        for id in self.selected_object_ids() {
+            let object = self.objects.get(&id.to_string()).unwrap().clone().unwrap();
+            let object = match object {
+                GravityObject::Cuboid(cuboid) => GravityObject::Cuboid(Cuboid {
+                    id: format!("{}_copy", id),
+                    ..cuboid
+                }),
+                GravityObject::Sphere(sphere) => GravityObject::Sphere(Sphere {
+                    id: format!("{}_copy", id),
+                    ..sphere
+                }),
+            };
+            self.objects.insert(object.get_id(), Some(object));
         }
     }
 }
@@ -186,6 +291,7 @@ impl AddObject {
                 ),
             };
             self.object_number += 1;
+            self.id = "".to_string();
         }
     }
 }
@@ -345,7 +451,7 @@ impl eframe::App for GravityBuilderApp {
                 }
             }
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for (id, object) in model.objects.iter_mut() {
+                for (_, object) in model.objects.iter_mut() {
                     match object {
                         Some(obj) => match obj {
                             GravityObject::Cuboid(cuboid) => {
@@ -365,7 +471,7 @@ impl eframe::App for GravityBuilderApp {
             }
 
             if model.number_objects_selected() == 1 {
-                for (id, object) in model.objects.iter_mut() {
+                for (_, object) in model.objects.iter_mut() {
                     match object {
                         Some(obj) => match obj {
                             GravityObject::Cuboid(cuboid) => {
@@ -496,7 +602,6 @@ impl eframe::App for GravityBuilderApp {
             // ui.heading("Gravity Model Builder");
             let measurement_points = measurement_params.points();
             let x = measurement_points.index_axis(Axis(1), 0);
-
             // Associate colour with a cuboid. Also give cuboid a name id.
             let data_plot = Plot::new("gravity")
                 .view_aspect(2.0)
@@ -505,9 +610,11 @@ impl eframe::App for GravityBuilderApp {
                 .include_x(10.)
                 .include_y(0.)
                 .width(720.)
+                .auto_bounds_x()
+                .auto_bounds_y()
                 .legend(Legend::default());
 
-            // let edit_mode = ctx.input().key_down(Key::P) || ctx.input().key_down(Key::L);
+            let edit_mode = ctx.input().key_down(Key::M) || ctx.input().key_down(Key::L);
 
             let model_plot_xz = Plot::new("underground_xz")
                 .view_aspect(2.0)
@@ -518,9 +625,11 @@ impl eframe::App for GravityBuilderApp {
                 .include_y(2.)
                 .include_y(-10.)
                 .width(720.)
-                .legend(Legend::default());
-            // .allow_boxed_zoom(if edit_mode {false} else {true})
-            // .allow_drag(if edit_mode {false} else {true});
+                .legend(Legend::default())
+                .auto_bounds_x()
+                .auto_bounds_y()
+                .allow_boxed_zoom(if edit_mode { false } else { true })
+                .allow_drag(if edit_mode { false } else { true });
 
             // let model_plot_yz = Plot::new("underground_yz")
             //     .view_aspect(2.0)
@@ -565,7 +674,11 @@ impl eframe::App for GravityBuilderApp {
                                         .map(|(x, val)| [*x, *val])
                                         .collect();
                                     let line = Line::new(data_2d);
-                                    plot_ui.line(line.name(key).color(cuboid.colour));
+                                    plot_ui.line(
+                                        line.name(key)
+                                            .color(cuboid.colour)
+                                            .highlight(cuboid.is_selected),
+                                    );
                                     data_total = data_total + &data;
                                 }
                                 GravityObject::Sphere(sphere) => {
@@ -579,7 +692,12 @@ impl eframe::App for GravityBuilderApp {
                                         .map(|(x, val)| [*x, *val])
                                         .collect();
                                     let line = Line::new(data_2d);
-                                    plot_ui.line(line.name(key).color(sphere.colour));
+                                    // let line = sphere.egui_data_plot_line(data);
+                                    plot_ui.line(
+                                        line.name(key)
+                                            .color(sphere.colour)
+                                            .highlight(sphere.is_selected),
+                                    );
                                     data_total = data_total + &data;
                                 }
                             },
@@ -603,121 +721,109 @@ impl eframe::App for GravityBuilderApp {
             ui.separator();
 
             ui.horizontal(|ui| {
-                model_plot_xz.show(ui, |plot_ui| {
-                    let plot_points: Vec<[f64; 2]> = measurement_points
-                        .index_axis(Axis(1), 0)
-                        .into_iter()
-                        .zip(measurement_points.index_axis(Axis(1), 2).into_iter())
-                        .map(|(x, z)| [*x, *z])
-                        .collect();
-                    plot_ui.points(
-                        Points::new(plot_points)
-                            .name("data points")
-                            .color(Color32::WHITE),
-                    );
+                let plot_response = model_plot_xz
+                    .show(ui, |plot_ui| {
+                        let plot_points: Vec<[f64; 2]> = measurement_points
+                            .index_axis(Axis(1), 0)
+                            .into_iter()
+                            .zip(measurement_points.index_axis(Axis(1), 2).into_iter())
+                            .map(|(x, z)| [*x, *z])
+                            .collect();
+                        plot_ui.points(
+                            Points::new(plot_points)
+                                .name("Points")
+                                .color(Color32::WHITE),
+                        );
 
-                    for (id, object) in model.objects.iter() {
-                        match object {
-                            Some(obj) => match obj {
-                                GravityObject::Cuboid(cuboid) => {
-                                    let polygon =
-                                        Polygon::new(PlotPoints::from(cuboid.vertices_xz()));
-                                    plot_ui.polygon(polygon.name(id).color(cuboid.colour));
-                                }
-                                GravityObject::Sphere(sphere) => {
-                                    let polygon =
-                                        Polygon::new(PlotPoints::from_parametric_callback(
-                                            |t| {
-                                                (
-                                                    sphere.x_centroid + t.sin(),
-                                                    sphere.z_centroid + t.cos(),
-                                                )
-                                            },
-                                            0.0..TAU,
-                                            100,
-                                        ));
-                                    plot_ui.polygon(polygon.name(id).color(sphere.colour));
-                                }
-                            },
-                            None => {}
+                        for (id, object) in model.objects.iter() {
+                            match object {
+                                Some(obj) => match obj {
+                                    GravityObject::Cuboid(cuboid) => {
+                                        let polygon =
+                                            Polygon::new(PlotPoints::from(cuboid.vertices_xz()));
+                                        plot_ui.polygon(
+                                            polygon
+                                                .name(id)
+                                                .color(cuboid.colour)
+                                                .highlight(cuboid.is_selected),
+                                        );
+                                    }
+                                    GravityObject::Sphere(sphere) => {
+                                        let polygon =
+                                            Polygon::new(PlotPoints::from_parametric_callback(
+                                                |t| {
+                                                    (
+                                                        sphere.x_centroid + sphere.radius * t.sin(),
+                                                        sphere.z_centroid + sphere.radius * t.cos(),
+                                                    )
+                                                },
+                                                0.0..TAU,
+                                                100,
+                                            ));
+                                        plot_ui.polygon(
+                                            polygon
+                                                .name(id)
+                                                .color(sphere.colour)
+                                                .highlight(sphere.is_selected),
+                                        );
+                                    }
+                                },
+                                None => {}
+                            }
                         }
-                    }
 
-                    // if ctx.input().key_down(Key::L) && plot_ui.plot_hovered() {
-                    //     let drag_delta = plot_ui.pointer_coordinate_drag_delta();
-                    //     if !cuboids.is_empty() {
-                    //         let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
-                    //         if current_cuboid.x_length + drag_delta.x as f64 > 0. {
-                    //             current_cuboid.x_length += drag_delta.x as f64;
-                    //         }
+                        // if ctx.input().key_down(Key::L) && plot_ui.plot_hovered() {
+                        //     let drag_delta = plot_ui.pointer_coordinate_drag_delta();
+                        //     if !cuboids.is_empty() {
+                        //         let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
+                        //         if current_cuboid.x_length + drag_delta.x as f64 > 0. {
+                        //             current_cuboid.x_length += drag_delta.x as f64;
+                        //         }
 
-                    //         if current_cuboid.z_length + drag_delta.y as f64 > 0. {
-                    //             current_cuboid.z_length += drag_delta.y as f64;
-                    //         }
-                    //     }
-                    // }
+                        //         if current_cuboid.z_length + drag_delta.y as f64 > 0. {
+                        //             current_cuboid.z_length += drag_delta.y as f64;
+                        //         }
+                        //     }
+                        // }
 
-                    // if ctx.input().key_down(Key::P) && plot_ui.plot_hovered() {
-                    //     let position = plot_ui.pointer_coordinate().unwrap_or(PlotPoint {x: 0., y: 0.}).to_vec2();
-                    //     if !cuboids.is_empty() {
-                    //         let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
-                    //         current_cuboid.x_centroid = position.x as f64;
-                    //         current_cuboid.z_centroid = position.y as f64;
-                    //     }
-                    // }
-                    if plot_ui.plot_hovered()
-                        && plot_ui.plot_clicked()
-                        && ctx.input().modifiers.shift
-                    {
-                        model.select_by_click_xz(plot_ui);
-                    }
-                });
+                        // if ctx.input().key_down(Key::P) && plot_ui.plot_hovered() {
+                        //     let position = plot_ui.pointer_coordinate().unwrap_or(PlotPoint {x: 0., y: 0.}).to_vec2();
+                        //     if !cuboids.is_empty() {
+                        //         let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
+                        //         current_cuboid.x_centroid = position.x as f64;
+                        //         current_cuboid.z_centroid = position.y as f64;
+                        //     }
+                        // }
+                        if plot_ui.plot_hovered() && plot_ui.plot_clicked()
+                        // && ctx.input().modifiers.shift
+                        {
+                            model.select_by_click_xz(plot_ui);
+                        }
 
-                // model_plot_yz
-                // .show(ui, |plot_ui| {
-                //     let plot_points: Vec<[f64; 2]> = measurement_points.index_axis(Axis(1), 1).into_iter()
-                //     .zip(measurement_points.index_axis(Axis(1), 2).into_iter())
-                //     .map(|(x,z)| [*x,*z]).collect();
-                //     plot_ui.points(Points::new(plot_points).name("data points").color(Color32::WHITE));
+                        if plot_ui.plot_hovered()
+                            && ctx.input().key_pressed(Key::C)
+                            && ctx.input().modifiers.ctrl
+                        {
+                            model.copy_selected();
+                        }
 
-                //     for (key,cuboid) in cuboids.iter() {
-                //         let polygon = Polygon::new(PlotPoints::from(cuboid.vertices_yz()));
-                //         plot_ui.polygon(polygon.name(key).color(cuboid.colour));
-                //     }
+                        if plot_ui.plot_hovered() && ctx.input().key_down(Key::M) {
+                            model.translate_selected(plot_ui);
+                        }
 
-                //     if ctx.input().key_down(Key::L) && plot_ui.plot_hovered() {
-                //         let drag_delta = plot_ui.pointer_coordinate_drag_delta();
-                //         if !cuboids.is_empty() {
-                //             let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
-                //             if current_cuboid.y_length + drag_delta.x as f64 > 0. {
-                //                 current_cuboid.y_length += drag_delta.x as f64;
-                //             }
+                        if plot_ui.plot_hovered()
+                            && ctx.input().key_down(Key::L)
+                            && model.number_objects_selected() == 1
+                        {
+                            model.scale_selected(plot_ui);
+                        }
+                    })
+                    .response;
 
-                //             if current_cuboid.z_length + drag_delta.y as f64 > 0. {
-                //                 current_cuboid.z_length += drag_delta.y as f64;
-                //             }
-                //         }
-                //     }
+                // plot_response.context_menu(|ui| {
 
-                //     if ctx.input().key_down(Key::P) && plot_ui.plot_hovered() {
-                //         let position = plot_ui.pointer_coordinate().unwrap_or(PlotPoint {x: 0., y: 0.}).to_vec2();
-                //         if !cuboids.is_empty() {
-                //             let current_cuboid = cuboids.get_mut(current_cuboid_id).unwrap();
-                //             current_cuboid.y_centroid = position.x as f64;
-                //             current_cuboid.z_centroid = position.y as f64;
-                //         }
-                //     }
                 // });
             });
-            // if ui.button("verts").clicked() {
-            //     for (_,cuboid) in cuboids {
-            //         println!("{:?}",cuboid.vertices());
-            //         println!("{:?}",cuboid.vertices_xz());
-            //         println!("{:?}",cuboid.vertices_yz());
-            //         println!("{:?}",cuboid.vertices_xy());
-            //     }
-
-            // }
         });
     }
 }

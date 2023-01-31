@@ -1,9 +1,9 @@
 use egui::{Color32, Ui};
 use ndarray::prelude::*;
-use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::f64::consts::PI;
-use std::fmt::{self};
+use std::fmt;
+
+// use crate::app::MeasurementParameters;
 // use assert_approx_eq::assert_approx_eq;
 // use ndarray::arr2;
 // use rayon::prelude::*;
@@ -124,7 +124,6 @@ pub trait GravityCalc {
                     data[i] += self.gzz(&point.to_owned())
                 }
             }
-            _ => {}
         }
         data * scaling
     }
@@ -231,8 +230,8 @@ impl GravityCalc for Sphere {
         // Only fetch relevant values once
         let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum();
         let x = p_dash[0];
-        let y = p_dash[1];
-        let z = p_dash[2];
+        // let y = p_dash[1];
+        // let z = p_dash[2];
         let constant = -(4. / 3.) * PI * G * self.radius.powi(3) * self.density;
         (constant / r.powf(3. / 2.)) * (1. - ((3. * x.powi(2)) / r))
     }
@@ -241,7 +240,7 @@ impl GravityCalc for Sphere {
         let p_dash: Array1<f64> = position * (1. + 1e-7) - self.centre();
         // Only fetch relevant values once
         let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum();
-        let x = p_dash[0];
+        // let x = p_dash[0];
         let y = p_dash[1];
         let z = p_dash[2];
         let constant = -(4. / 3.) * PI * G * self.radius.powi(3) * self.density;
@@ -253,7 +252,7 @@ impl GravityCalc for Sphere {
         // Only fetch relevant values once
         let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum();
         let x = p_dash[0];
-        let y = p_dash[1];
+        // let y = p_dash[1];
         let z = p_dash[2];
         let constant = -(4. / 3.) * PI * G * self.radius.powi(3) * self.density;
         (-3. * constant * x * z) / (r.powf(5. / 2.))
@@ -263,9 +262,9 @@ impl GravityCalc for Sphere {
         let p_dash: Array1<f64> = position * (1. + 1e-7) - self.centre();
         // Only fetch relevant values once
         let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum();
-        let x = p_dash[0];
+        // let x = p_dash[0];
         let y = p_dash[1];
-        let z = p_dash[2];
+        // let z = p_dash[2];
         let constant = -(4. / 3.) * PI * G * self.radius.powi(3) * self.density;
         (constant / r.powf(3. / 2.)) * (1. - ((3. * y.powi(2)) / r))
     }
@@ -285,8 +284,8 @@ impl GravityCalc for Sphere {
         let p_dash: Array1<f64> = position * (1. + 1e-7) - self.centre();
         // Only fetch relevant values once
         let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum();
-        let x = p_dash[0];
-        let y = p_dash[1];
+        // let x = p_dash[0];
+        // let y = p_dash[1];
         let z = p_dash[2];
         let constant = -(4. / 3.) * PI * G * self.radius.powi(3) * self.density;
         (constant / r.powf(3. / 2.)) * (1. - ((3. * z.powi(2)) / r))
@@ -772,7 +771,7 @@ impl Cuboid {
 }
 
 impl fmt::Display for Cuboid {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "x_length: {}, y_length: {}, z_length: {}, volume: {}, mass: {}, centre: {}",
