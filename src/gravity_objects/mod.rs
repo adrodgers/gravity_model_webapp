@@ -1,4 +1,4 @@
-use egui::Color32;
+use egui::{Color32, Ui};
 use ndarray::prelude::*;
 use serde::{Serialize, Deserialize};
 use std::collections::HashSet;
@@ -13,22 +13,63 @@ use std::f64::consts::PI;
 
 const G: f64 = 6.674e-11;
 
-pub struct Group {
-    id: String,
-    members: HashSet<String>
-}
+// pub struct Group {
+//     id: String,
+//     members: HashSet<String>
+// }
 
-impl Default for Group {
-    fn default() -> Self {
-        Self { id: String::new(), members: HashSet::new()}
-    }
-}
+// impl Default for Group {
+//     fn default() -> Self {
+//         Self { id: String::new(), members: HashSet::new()}
+//     }
+// }
 
 /// Required methods to define a new gravity object, to be used within a gravity model.
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq)] 
 pub enum GravityObject {
     Cuboid(Cuboid),
     Sphere(Sphere)
+}
+
+impl GravityInfo for GravityObject {
+
+    fn get_density(&self) -> f64 {
+        match self {
+            GravityObject::Cuboid(cuboid) => cuboid.density,
+            GravityObject::Sphere(sphere) => sphere.density,
+        }
+    }
+
+    fn get_id(&self) -> String {
+        match self {
+            GravityObject::Cuboid(cuboid) => cuboid.id.to_string(),
+            GravityObject::Sphere(sphere) => sphere.id.to_string(),
+        }
+    }
+
+    fn is_selected(&self) -> bool {
+        match self {
+            GravityObject::Cuboid(cuboid) => cuboid.is_selected,
+            GravityObject::Sphere(sphere) => sphere.is_selected,
+        }
+    }
+}
+
+// pub enum GravityObject {
+//     Cuboid,
+//     Sphere
+// }
+
+pub trait GravityInfo {
+    // fn volume(&self) -> f64;
+
+    // fn mass(&self) -> f64;
+
+    fn get_density(&self) -> f64;
+
+    fn get_id(&self) -> String;
+
+    fn is_selected(&self) -> bool;
 }
 
 pub trait GravityCalc {
@@ -91,13 +132,15 @@ pub trait GravityCalc {
 
     fn gzz(&self, position: &Array1<f64>) -> f64;
 
+    fn centre(&self) -> Array1<f64>;
+
     fn volume(&self) -> f64;
 
     fn mass(&self) -> f64;
 
-    fn centre(&self) -> Array1<f64>;
+    // fn get_density(&self) -> f64;
 
-    fn get_density(&self) -> f64;
+    // fn get_id(&self) -> String;
 
 }
 
@@ -123,11 +166,12 @@ pub struct Sphere {
     pub density: f64,
     pub id: String,
     pub colour: Color32,
+    pub is_selected: bool,
 }
 
 impl Default for Sphere {
     fn default() -> Self {
-        Self { x_centroid: 0., y_centroid: 0., z_centroid: -1., radius: 1., density: -2000., colour: Color32::RED, id: "Default".to_string() }
+        Self { x_centroid: 0., y_centroid: 0., z_centroid: -1., radius: 1., density: -2000., colour: Color32::RED, id: "Default".to_string(), is_selected: false }
     }
 }
 
@@ -247,8 +291,55 @@ impl GravityCalc for Sphere {
         Array1::from(vec![self.x_centroid,self.y_centroid,self.z_centroid])
     }
 
-    fn get_density(&self) -> f64 {
-        self.density
+    // fn get_density(&self) -> f64 {
+    //     self.density
+    // }
+
+    // fn get_id(&self) -> String {
+    //     self.id
+    // }
+
+}
+
+impl Sphere {
+    pub fn egui_input(&mut self, ui: &mut Ui) {
+        egui::CollapsingHeader::new("position")
+            .show(ui, |ui| {
+                ui.label("x centroid");
+                ui.add(egui::Slider::new(&mut self.x_centroid, -50.0..=50.0).text("m"));
+
+                ui.label("y centroid");
+                ui.add(egui::Slider::new(&mut self.y_centroid, -50.0..=50.0).text("m"));
+                
+                ui.label("z centroid");
+                ui.add(egui::Slider::new(&mut self.z_centroid, -25.0..=25.0).text("m"));
+        });
+        egui::CollapsingHeader::new("volume")
+            .show(ui, |ui| {
+                ui.label("radius");
+                ui.add(egui::Slider::new(&mut self.radius, 0.1..=100.0).text("m"));
+                
+                // ui.separator();
+                // ui.label(format!("Volume: {}",self.volume()));
+        });
+        egui::CollapsingHeader::new("density")
+            .show(ui, |ui| {
+                ui.add(egui::Slider::new(&mut self.density, -3000.0..=22590.).text("kg/m^3"));
+                if ui.button("soil void").clicked() {
+                    self.density = -1800.;
+                }
+                if ui.button("concrete").clicked() {
+                    self.density = 2000.;
+                }
+                if ui.button("lead").clicked() {
+                    self.density = 11340.;
+                }
+                if ui.button("tungsten").clicked() {
+                    self.density = 19300.;
+                }
+                // ui.separator();
+                // ui.label(format!("Mass: {}",self.mass()));      
+        });
     }
 
 }
@@ -265,6 +356,7 @@ pub struct Cuboid {
     pub density: f64,
     pub id: String,
     pub colour: Color32,
+    pub is_selected: bool
 }
 
 impl Default for Cuboid {
@@ -279,7 +371,7 @@ impl Default for Cuboid {
     //     [1., 1., 1.],
     //     [1., -1., 1.]
     // ]; 
-        Self { x_length: 1., y_length: 1., z_length: 1., x_centroid: 0., y_centroid: 0., z_centroid: -1., density: -2000., colour: Color32::RED, id: "Default".to_string()}
+        Self { x_length: 1., y_length: 1., z_length: 1., x_centroid: 0., y_centroid: 0., z_centroid: -1., density: -2000., colour: Color32::RED, id: "Default".to_string(), is_selected: false}
     }
 }
 
@@ -456,14 +548,18 @@ impl GravityCalc for Cuboid {
         Array1::from(vec![self.x_centroid,self.y_centroid,self.z_centroid])
     }
 
-    fn get_density(&self) -> f64 {
-        self.density
-    }
+    // fn get_density(&self) -> f64 {
+    //     self.density
+    // }
+
+    // fn get_id(&self) -> String {
+    //     self.id
+    // }
 }
 
 impl Cuboid {
 
-    pub fn new_from_lengths(x_length: f64, y_length: f64, z_length: f64, x_centroid: f64, y_centroid: f64, z_centroid: f64, density: f64, id: String, colour: Color32) -> Cuboid {
+    pub fn new_from_lengths(x_length: f64, y_length: f64, z_length: f64, x_centroid: f64, y_centroid: f64, z_centroid: f64, density: f64, id: String, colour: Color32, is_selected: bool) -> Cuboid {
         Cuboid {
             x_length,
             y_length,
@@ -473,7 +569,8 @@ impl Cuboid {
             z_centroid,
             density: density,
             id: id,
-            colour: colour
+            colour: colour,
+            is_selected: is_selected
         }
     }
 
@@ -555,6 +652,51 @@ impl Cuboid {
         vec![[verts[[0, 0]],verts[[0, 1]]],[verts[[2, 0]],verts[[2, 1]]],[verts[[5, 0]],verts[[5, 1]]],[verts[[7, 0]],verts[[7, 1]]],]
     }
 
+    pub fn egui_input(&mut self, ui: &mut Ui) {
+        egui::CollapsingHeader::new("position")
+            .show(ui, |ui| {
+                ui.label("x centroid");
+                ui.add(egui::Slider::new(&mut self.x_centroid, -50.0..=50.0).text("m"));
+
+                ui.label("y centroid");
+                ui.add(egui::Slider::new(&mut self.y_centroid, -50.0..=50.0).text("m"));
+                
+                ui.label("z centroid");
+                ui.add(egui::Slider::new(&mut self.z_centroid, -25.0..=25.0).text("m"));
+        });
+        egui::CollapsingHeader::new("volume")
+            .show(ui, |ui| {
+                ui.label("x length");
+                ui.add(egui::Slider::new(&mut self.x_length, 0.1..=100.0).text("m"));
+                
+                ui.label("y length");
+                ui.add(egui::Slider::new(&mut self.y_length, 0.1..=100.0).text("m"));
+
+                ui.label("z length");
+                ui.add(egui::Slider::new(&mut self.z_length, 0.1..=25.0).text("m").drag_value_speed(0.1));
+                // ui.separator();
+                // ui.label(format!("Volume: {}",self.volume()));
+        });
+        egui::CollapsingHeader::new("density")
+            .show(ui, |ui| {
+                ui.add(egui::Slider::new(&mut self.density, -3000.0..=22590.).text("kg/m^3"));
+                if ui.button("soil void").clicked() {
+                    self.density = -1800.;
+                }
+                if ui.button("concrete").clicked() {
+                    self.density = 2000.;
+                }
+                if ui.button("lead").clicked() {
+                    self.density = 11340.;
+                }
+                if ui.button("tungsten").clicked() {
+                    self.density = 19300.;
+                }
+                // ui.separator();
+                // ui.label(format!("Mass: {}",self.mass()));      
+        });
+    }
+
 }
 
 impl fmt::Display for Cuboid {
@@ -562,6 +704,7 @@ impl fmt::Display for Cuboid {
         write!(
             f,
             "x_length: {}, y_length: {}, z_length: {}, volume: {}, mass: {}, centre: {}",
+            // "x_length: {}, y_length: {}, z_length: {}, centre: {}",
             self.x_length,
             self.y_length,
             self.z_length,

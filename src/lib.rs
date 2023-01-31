@@ -1,5 +1,5 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
 mod app;
-mod cuboid;
-pub use app::TemplateApp;
+mod gravity_objects;
+pub use app::GravityBuilderApp;

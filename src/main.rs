@@ -1,7 +1,7 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-mod cuboid;
+mod gravity_objects;
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
@@ -12,7 +12,7 @@ fn main() {
     eframe::run_native(
         "Gravity Model Builder",
         native_options,
-        Box::new(|cc| Box::new(gravity_model_webapp::TemplateApp::new(cc))),
+        Box::new(|cc| Box::new(gravity_model_webapp::GravityBuilderApp::new(cc))),
     );
 }
 
