@@ -31,7 +31,7 @@ fn main() {
         eframe::start_web(
             "the_canvas_id", // hardcode it
             web_options,
-            Box::new(|cc| Box::new(gravity_model_webapp::TemplateApp::new(cc))),
+            Box::new(|cc| Box::new(gravity_model_webapp::GravityBuilderApp::new(cc))),
         )
         .await
         .expect("failed to start eframe");
