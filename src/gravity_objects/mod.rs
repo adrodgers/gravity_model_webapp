@@ -38,10 +38,10 @@ impl GravityInfo for GravityObject {
         }
     }
 
-    fn get_id(&self) -> String {
+    fn get_name(&self) -> String {
         match self {
-            GravityObject::Cuboid(cuboid) => cuboid.id.to_string(),
-            GravityObject::Sphere(sphere) => sphere.id.to_string(),
+            GravityObject::Cuboid(cuboid) => cuboid.name.to_string(),
+            GravityObject::Sphere(sphere) => sphere.name.to_string(),
         }
     }
 
@@ -65,7 +65,7 @@ pub trait GravityInfo {
 
     fn get_density(&self) -> f64;
 
-    fn get_id(&self) -> String;
+    fn get_name(&self) -> String;
 
     fn is_selected(&self) -> bool;
 }
@@ -177,7 +177,8 @@ pub struct Sphere {
     pub z_centroid: f64,
     pub radius: f64,
     pub density: f64,
-    pub id: String,
+    pub name: String,
+    pub id: u128,
     pub colour: Color32,
     pub is_selected: bool,
 }
@@ -191,7 +192,8 @@ impl Default for Sphere {
             radius: 1.,
             density: -2000.,
             colour: Color32::RED,
-            id: "Default".to_string(),
+            name: "Default".to_string(),
+            id: 0,
             is_selected: false,
         }
     }
@@ -361,7 +363,8 @@ pub struct Cuboid {
     pub y_centroid: f64,
     pub z_centroid: f64,
     pub density: f64,
-    pub id: String,
+    pub name: String,
+    pub id: u128,
     pub colour: Color32,
     pub is_selected: bool,
 }
@@ -387,7 +390,8 @@ impl Default for Cuboid {
             z_centroid: -1.,
             density: -2000.,
             colour: Color32::RED,
-            id: "Default".to_string(),
+            name: "Default".to_string(),
+            id: 0,
             is_selected: false,
         }
     }
@@ -580,7 +584,8 @@ impl Cuboid {
         y_centroid: f64,
         z_centroid: f64,
         density: f64,
-        id: String,
+        id: u128,
+        name: String,
         colour: Color32,
         is_selected: bool,
     ) -> Cuboid {
@@ -593,6 +598,7 @@ impl Cuboid {
             z_centroid,
             density: density,
             id: id,
+            name: name,
             colour: colour,
             is_selected: is_selected,
         }

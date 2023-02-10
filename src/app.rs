@@ -15,6 +15,7 @@ const MAX_OBJECTS: usize = 100;
 pub struct Model {
     objects: BTreeMap<String, Option<GravityObject>>,
     groups: BTreeMap<String, Option<BTreeSet<String>>>,
+    object_counter: u128,
 }
 
 impl Default for Model {
@@ -23,7 +24,7 @@ impl Default for Model {
         objects.insert("None".to_string(), None);
         let mut groups: BTreeMap<String, Option<BTreeSet<String>>> = BTreeMap::new();
         groups.insert("None".to_string(), None);
-        Self { objects, groups }
+        Self { objects, groups, object_counter: 0 }
     }
 }
 
@@ -210,18 +211,38 @@ impl Model {
 
     pub fn copy_selected(&mut self) {
         for id in self.selected_object_ids() {
+            // println!("Object: {}", id);
             let object = self.objects.get(&id.to_string()).unwrap().clone().unwrap();
-            let object = match object {
+            // println!("Object: {:?}", object);
+            let new_object = match object {
                 GravityObject::Cuboid(cuboid) => GravityObject::Cuboid(Cuboid {
-                    id: format!("{}_copy", id),
+                    // name: format!("{}_copy", cuboid.name),
+                    id: self.object_counter,
                     ..cuboid
                 }),
                 GravityObject::Sphere(sphere) => GravityObject::Sphere(Sphere {
-                    id: format!("{}_copy", id),
+                    // name: format!("{}_copy", sphere.name),
+                    id: self.object_counter,
                     ..sphere
                 }),
             };
-            self.objects.insert(object.get_id(), Some(object));
+            println!("New Object: {:?}", new_object);
+            self.add_object(new_object);
+        }
+    }
+
+    pub fn add_object(&mut self, object: GravityObject) {
+        // let object = add_object.create();
+        if self.objects.len() < MAX_OBJECTS {
+            match object {
+                GravityObject::Cuboid(cuboid) => self.objects.insert(cuboid.id.to_string(),
+                    Some(GravityObject::Cuboid(Cuboid{id:self.object_counter, ..cuboid}))
+                    ),
+                GravityObject::Sphere(sphere) => self.objects.insert(sphere.id.to_string(),
+                    Some(GravityObject::Sphere(Sphere{id:self.object_counter, ..sphere}))
+                    ),
+            };
+            self.object_counter += 1;
         }
     }
 }
@@ -252,7 +273,7 @@ impl Model {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct AddObject {
-    id: String,
+    name: String,
     colour: Color32,
     object_type: GravityObject,
     object_number: u128,
@@ -261,7 +282,7 @@ pub struct AddObject {
 impl Default for AddObject {
     fn default() -> Self {
         Self {
-            id: "Default".to_string(),
+            name: "Default".to_string(),
             colour: Color32::TEMPORARY_COLOR,
             object_type: GravityObject::Cuboid(Cuboid::default()),
             object_number: 0,
@@ -270,30 +291,12 @@ impl Default for AddObject {
 }
 
 impl AddObject {
-    pub fn add(&mut self, objects: &mut BTreeMap<String, Option<GravityObject>>) {
-        if objects.len() < MAX_OBJECTS {
-            match &self.object_type {
-                GravityObject::Cuboid(_) => objects.insert(
-                    self.id.to_string(),
-                    Some(GravityObject::Cuboid(Cuboid {
-                        id: self.id.to_string(),
-                        colour: self.colour,
-                        ..Default::default()
-                    })),
-                ),
-                GravityObject::Sphere(_) => objects.insert(
-                    self.id.to_string(),
-                    Some(GravityObject::Sphere(Sphere {
-                        id: self.id.to_string(),
-                        colour: self.colour,
-                        ..Default::default()
-                    })),
-                ),
-            };
-            self.object_number += 1;
-            self.id = "".to_string();
-        }
-    }
+    // pub fn create(&self) -> GravityObject {
+    //     match self.object_type {
+    //         GravityObject::Cuboid(_) => GravityObject::Cuboid(Cuboid { id: id, name: self.name.to_string(), colour: self.colour, is_selected: true, ..Default::default() }),
+    //         GravityObject::Sphere(_) => GravityObject::Sphere(Sphere { id: id, name: self.name.to_string(), colour: self.colour, is_selected: true, ..Default::default() }),
+    //     }
+    // }
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -428,10 +431,14 @@ impl eframe::App for GravityBuilderApp {
                 GravityObject::Sphere(Sphere::default()),
                 "Sphere".to_string(),
             );
-            ui.text_edit_singleline(&mut add_object.id);
+            ui.text_edit_singleline(&mut add_object.name);
             ui.color_edit_button_srgba(&mut add_object.colour);
             if ui.button("Create object").clicked() {
-                add_object.add(&mut model.objects);
+                let object = match add_object.object_type {
+                    GravityObject::Cuboid(_) => GravityObject::Cuboid(Cuboid { id: model.object_counter, name: add_object.name.to_string(), colour: add_object.colour, is_selected: true, ..Default::default() }),
+                    GravityObject::Sphere(_) => GravityObject::Sphere(Sphere { id: model.object_counter, name: add_object.name.to_string(), colour: add_object.colour, is_selected: true, ..Default::default() }),
+                };
+                model.add_object(object);
             }
             if ui.button("Remove objects").clicked() {
                 let mut ids_to_delete: Vec<String> = vec![];
@@ -455,10 +462,10 @@ impl eframe::App for GravityBuilderApp {
                     match object {
                         Some(obj) => match obj {
                             GravityObject::Cuboid(cuboid) => {
-                                ui.checkbox(&mut cuboid.is_selected, cuboid.id.to_string());
+                                ui.checkbox(&mut cuboid.is_selected, format!("{}: {}",cuboid.id, cuboid.name.to_string()));
                             }
                             GravityObject::Sphere(sphere) => {
-                                ui.checkbox(&mut sphere.is_selected, sphere.id.to_string());
+                                ui.checkbox(&mut sphere.is_selected, format!("{}: {}",sphere.id, sphere.name.to_string()));
                             }
                         },
                         None => {}
