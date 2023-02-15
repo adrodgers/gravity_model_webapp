@@ -1,3 +1,4 @@
+use egui::plot::Line;
 use egui::{Color32, Ui};
 use ndarray::prelude::*;
 use std::f64::consts::PI;
@@ -71,62 +72,11 @@ pub trait GravityInfo {
 }
 
 pub trait GravityCalc {
-    fn calculate(&self, data_type: &DataType, measurement_points: &Array2<f64>) -> Array1<f64> {
-        let mut data: Array1<f64> = Array1::zeros(measurement_points.len_of(Axis(0)));
-        // let mut data = measurement_data.to_owned();
-        let scaling = match data_type {
-            DataType::Gx | DataType::Gy | DataType::Gz => -1E8,
-            _ => 1E9,
-        };
-        match data_type {
-            DataType::Gx => {
-                for (i, point) in measurement_points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gx(&point.to_owned())
-                }
-            }
-            DataType::Gy => {
-                for (i, point) in measurement_points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gy(&point.to_owned())
-                }
-            }
-            DataType::Gz => {
-                for (i, point) in measurement_points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gz(&point.to_owned())
-                }
-            }
-            DataType::Gxx => {
-                for (i, point) in measurement_points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gxx(&point.to_owned())
-                }
-            }
-            DataType::Gxy => {
-                for (i, point) in measurement_points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gxy(&point.to_owned())
-                }
-            }
-            DataType::Gxz => {
-                for (i, point) in measurement_points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gxz(&point.to_owned())
-                }
-            }
-            DataType::Gyy => {
-                for (i, point) in measurement_points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gyy(&point.to_owned())
-                }
-            }
-            DataType::Gyz => {
-                for (i, point) in measurement_points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gyz(&point.to_owned())
-                }
-            }
-            DataType::Gzz => {
-                for (i, point) in measurement_points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gzz(&point.to_owned())
-                }
-            }
-        }
-        data * scaling
-    }
+    // fn calculate(&self, data_type: &DataType, measurement_points: &Array2<f64>) -> Array1<f64>;
+
+    fn g(&self, position: &Array1<f64>) -> Array1<f64>;
+
+    fn gg(&self, position: &Array1<f64>) -> Array2<f64>;
 
     fn gx(&self, position: &Array1<f64>) -> f64;
 
@@ -151,10 +101,6 @@ pub trait GravityCalc {
     fn volume(&self) -> f64;
 
     fn mass(&self) -> f64;
-
-    // fn get_density(&self) -> f64;
-
-    // fn get_id(&self) -> String;
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq, Eq, Clone, Copy)]
@@ -200,6 +146,18 @@ impl Default for Sphere {
 }
 
 impl GravityCalc for Sphere {
+    // fn calculate(&self, data_type: &DataType, measurement_points: &Array2<f64>) -> Array1<f64> {
+    //     todo!()
+    // }
+
+    fn g(&self, position: &Array1<f64>) -> Array1<f64> {
+        todo!()
+    }
+
+    fn gg(&self, position: &Array1<f64>) -> Array2<f64> {
+        todo!()
+    }
+
     fn gx(&self, position: &Array1<f64>) -> f64 {
         let p_dash: Array1<f64> = position * (1. + 1e-7) - self.centre();
         // Only fetch relevant values once
@@ -275,7 +233,7 @@ impl GravityCalc for Sphere {
         let p_dash: Array1<f64> = position * (1. + 1e-7) - self.centre();
         // Only fetch relevant values once
         let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum();
-        let x = p_dash[0];
+        // let x = p_dash[0];
         let y = p_dash[1];
         let z = p_dash[2];
         let constant = -(4. / 3.) * PI * G * self.radius.powi(3) * self.density;
@@ -312,6 +270,64 @@ impl GravityCalc for Sphere {
     // fn get_id(&self) -> String {
     //     self.id
     // }
+}
+
+impl Sphere {
+    pub fn calculate(&self, data_type: &DataType, points: &Array2<f64>) -> Array1<f64> {
+        let mut data: Array1<f64> = Array1::zeros(points.len_of(Axis(0)));
+        let scaling = match data_type {
+            DataType::Gx | DataType::Gy | DataType::Gz => -1E8,
+            _ => 1E9,
+        };
+        match data_type {
+            DataType::Gx => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gx(&point.to_owned())
+                }
+            }
+            DataType::Gy => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gy(&point.to_owned())
+                }
+            }
+            DataType::Gz => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gz(&point.to_owned())
+                }
+            }
+            DataType::Gxx => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gxx(&point.to_owned())
+                }
+            }
+            DataType::Gxy => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gxy(&point.to_owned())
+                }
+            }
+            DataType::Gxz => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gxz(&point.to_owned())
+                }
+            }
+            DataType::Gyy => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gyy(&point.to_owned())
+                }
+            }
+            DataType::Gyz => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gyz(&point.to_owned())
+                }
+            }
+            DataType::Gzz => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gzz(&point.to_owned())
+                }
+            }
+        }
+        data * scaling
+    }
 }
 
 impl Sphere {
@@ -362,6 +378,9 @@ pub struct Cuboid {
     pub x_centroid: f64,
     pub y_centroid: f64,
     pub z_centroid: f64,
+    pub x_rotation: f64,
+    pub y_rotation: f64,
+    pub z_rotation: f64,
     pub density: f64,
     pub name: String,
     pub id: u128,
@@ -388,6 +407,9 @@ impl Default for Cuboid {
             x_centroid: 0.,
             y_centroid: 0.,
             z_centroid: -1.,
+            x_rotation: 0.,
+            y_rotation: 0.,
+            z_rotation: 0.,
             density: -2000.,
             colour: Color32::RED,
             name: "Default".to_string(),
@@ -397,10 +419,81 @@ impl Default for Cuboid {
     }
 }
 
+impl Cuboid {
+    pub fn calculate(&self, data_type: &DataType, points: &Array2<f64>) -> Array1<f64> {
+        let rotated_points = (points - self.centre())
+            .dot(&rotation_matrix_z(-self.z_rotation))
+            .dot(&rotation_matrix_y(-self.y_rotation))
+            .dot(&rotation_matrix_x(-self.x_rotation))
+            + self.centre();
+        let rotation_matrix = rotation_matrix_x(self.x_rotation)
+            .dot(&rotation_matrix_y(self.y_rotation).dot(&rotation_matrix_z(self.z_rotation)));
+        let mut data: Array1<f64> = Array1::zeros(points.len_of(Axis(0)));
+        let scaling = match data_type {
+            DataType::Gx | DataType::Gy | DataType::Gz => -1E8,
+            _ => 1E9,
+        };
+        match data_type {
+            DataType::Gx => {
+                for (i, point) in rotated_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.g(&point.to_owned()).dot(&rotation_matrix)[0]
+                }
+            }
+            DataType::Gy => {
+                for (i, point) in rotated_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.g(&point.to_owned()).dot(&rotation_matrix)[1]
+                }
+            }
+            DataType::Gz => {
+                for (i, point) in rotated_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.g(&point.to_owned()).dot(&rotation_matrix)[2]
+                }
+            }
+            DataType::Gxx => {
+                for (i, point) in rotated_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += (rotation_matrix.t().dot(&self.gg(&point.to_owned())))
+                        .dot(&rotation_matrix)[[0, 0]]
+                }
+            }
+            DataType::Gxy => {
+                for (i, point) in rotated_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += (rotation_matrix.t().dot(&self.gg(&point.to_owned())))
+                        .dot(&rotation_matrix)[[0, 1]]
+                }
+            }
+            DataType::Gxz => {
+                for (i, point) in rotated_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += (rotation_matrix.t().dot(&self.gg(&point.to_owned())))
+                        .dot(&rotation_matrix)[[0, 2]]
+                }
+            }
+            DataType::Gyy => {
+                for (i, point) in rotated_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += (rotation_matrix.t().dot(&self.gg(&point.to_owned())))
+                        .dot(&rotation_matrix)[[1, 1]]
+                }
+            }
+            DataType::Gyz => {
+                for (i, point) in rotated_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += (rotation_matrix.t().dot(&self.gg(&point.to_owned())))
+                        .dot(&rotation_matrix)[[1, 2]]
+                }
+            }
+            DataType::Gzz => {
+                for (i, point) in rotated_points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += (rotation_matrix.t().dot(&self.gg(&point.to_owned())))
+                        .dot(&rotation_matrix)[[2, 2]]
+                }
+            }
+        }
+        data * scaling
+    }
+}
+
 impl GravityCalc for Cuboid {
     fn gx(&self, position: &Array1<f64>) -> f64 {
         let mut gx = 0.;
-        let verts = self.vertices();
+        let verts = self.vertices_axis_aligned();
         for i in 0..8 {
             let p_dash: Array1<f64> =
                 position * (1. + 1e-7) - verts.index_axis(Axis(0), i).to_owned();
@@ -418,7 +511,7 @@ impl GravityCalc for Cuboid {
 
     fn gy(&self, position: &Array1<f64>) -> f64 {
         let mut gy = 0.;
-        let verts = self.vertices();
+        let verts = self.vertices_axis_aligned();
         for i in 0..8 {
             let p_dash: Array1<f64> =
                 position * (1. + 1e-7) - verts.index_axis(Axis(0), i).to_owned();
@@ -436,7 +529,7 @@ impl GravityCalc for Cuboid {
 
     fn gz(&self, position: &Array1<f64>) -> f64 {
         let mut gz = 0.;
-        let verts = self.vertices();
+        let verts = self.vertices_axis_aligned();
         for i in 0..8 {
             let p_dash: Array1<f64> =
                 position * (1. + 1e-7) - verts.index_axis(Axis(0), i).to_owned();
@@ -452,9 +545,59 @@ impl GravityCalc for Cuboid {
         gz * G * self.density
     }
 
+    fn g(&self, position: &Array1<f64>) -> Array1<f64> {
+        let mut g: Array1<f64> = Array1::zeros(3);
+        let verts = self.vertices_axis_aligned();
+        for i in 0..8 {
+            let p_dash: Array1<f64> =
+                position * (1. + 1e-7) - verts.index_axis(Axis(0), i).to_owned();
+            // Only fetch relevant values once
+            let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
+            let sign = Cuboid::index_order()[i];
+            let x = p_dash[0];
+            let y = p_dash[1];
+            let z = p_dash[2];
+            g[0] +=
+                sign * ((y * (r + z).ln()) + (z * (r + y).ln()) - (x * ((y * z) / (r * x)).atan()));
+            g[1] +=
+                sign * ((z * (r + x).ln()) + (x * (r + z).ln()) - (y * ((x * z) / (r * y)).atan()));
+            g[2] +=
+                sign * ((x * (r + y).ln()) + (y * (r + x).ln()) - (z * ((x * y) / (r * z)).atan()));
+        }
+        g * G * self.density
+    }
+
+    fn gg(&self, position: &Array1<f64>) -> Array2<f64> {
+        let mut gg: Array2<f64> = Array2::zeros((3, 3));
+        let verts = self.vertices_axis_aligned();
+        for i in 0..8 {
+            let p_dash: Array1<f64> =
+                position * (1. + 1e-7) - verts.index_axis(Axis(0), i).to_owned();
+            // Only fetch relevant values once
+            let r = p_dash.mapv(|p_dash| p_dash.powi(2)).sum().sqrt();
+            let sign = Cuboid::index_order()[i];
+            let x = p_dash[0];
+            let y = p_dash[1];
+            let z = p_dash[2];
+            gg[[0, 0]] += sign * -((y * z) / (r * x)).atan();
+            gg[[1, 1]] += sign * -((x * z) / (r * y)).atan();
+            gg[[2, 2]] += sign * -((y * x) / (r * z)).atan();
+
+            gg[[0, 1]] += sign * (r + z).ln();
+            gg[[0, 2]] += sign * (r + y).ln();
+            gg[[1, 2]] += sign * (r + x).ln();
+        }
+
+        gg[[1, 0]] += gg[[0, 1]];
+        gg[[2, 0]] += gg[[0, 2]];
+        gg[[2, 1]] += gg[[1, 2]];
+
+        gg * G * self.density
+    }
+
     fn gxx(&self, position: &Array1<f64>) -> f64 {
         let mut gxx = 0.;
-        let verts = self.vertices();
+        let verts = self.vertices_axis_aligned();
         for i in 0..8 {
             let p_dash: Array1<f64> =
                 position * (1. + 1e-7) - verts.index_axis(Axis(0), i).to_owned();
@@ -471,7 +614,7 @@ impl GravityCalc for Cuboid {
 
     fn gxy(&self, position: &Array1<f64>) -> f64 {
         let mut gxy = 0.;
-        let verts = self.vertices();
+        let verts = self.vertices_axis_aligned();
         for i in 0..8 {
             let p_dash: Array1<f64> =
                 position * (1. + 1e-7) - verts.index_axis(Axis(0), i).to_owned();
@@ -488,7 +631,7 @@ impl GravityCalc for Cuboid {
 
     fn gxz(&self, position: &Array1<f64>) -> f64 {
         let mut gxz = 0.;
-        let verts = self.vertices();
+        let verts = self.vertices_axis_aligned();
         for i in 0..8 {
             let p_dash: Array1<f64> =
                 position * (1. + 1e-7) - verts.index_axis(Axis(0), i).to_owned();
@@ -505,7 +648,7 @@ impl GravityCalc for Cuboid {
 
     fn gyy(&self, position: &Array1<f64>) -> f64 {
         let mut gyy = 0.;
-        let verts = self.vertices();
+        let verts = self.vertices_axis_aligned();
         for i in 0..8 {
             let p_dash: Array1<f64> =
                 position * (1. + 1e-7) - verts.index_axis(Axis(0), i).to_owned();
@@ -522,7 +665,7 @@ impl GravityCalc for Cuboid {
 
     fn gyz(&self, position: &Array1<f64>) -> f64 {
         let mut gyz = 0.;
-        let verts = self.vertices();
+        let verts = self.vertices_axis_aligned();
         for i in 0..8 {
             let p_dash: Array1<f64> =
                 position * (1. + 1e-7) - verts.index_axis(Axis(0), i).to_owned();
@@ -539,7 +682,7 @@ impl GravityCalc for Cuboid {
 
     fn gzz(&self, position: &Array1<f64>) -> f64 {
         let mut gzz = 0.;
-        let verts = self.vertices();
+        let verts = self.vertices_axis_aligned();
         for i in 0..8 {
             let p_dash: Array1<f64> =
                 position * (1. + 1e-7) - verts.index_axis(Axis(0), i).to_owned();
@@ -583,6 +726,9 @@ impl Cuboid {
         x_centroid: f64,
         y_centroid: f64,
         z_centroid: f64,
+        x_rotation: f64,
+        y_rotation: f64,
+        z_rotation: f64,
         density: f64,
         id: u128,
         name: String,
@@ -596,6 +742,9 @@ impl Cuboid {
             x_centroid,
             y_centroid,
             z_centroid,
+            x_rotation,
+            y_rotation,
+            z_rotation,
             density: density,
             id: id,
             name: name,
@@ -609,7 +758,7 @@ impl Cuboid {
         array![1., -1., 1., -1., -1., 1., -1., 1.]
     }
     /// Return cuboid vertices, order aligned with self.index_order()
-    pub fn vertices(&self) -> Array2<f64> {
+    pub fn vertices_axis_aligned(&self) -> Array2<f64> {
         array![
             [
                 self.x_centroid - self.x_length / 2.,
@@ -654,79 +803,55 @@ impl Cuboid {
         ]
     }
 
-    pub fn translate_x(&mut self, val: f64) {
-        self.x_centroid += val;
-    }
-
-    pub fn translate_y(&mut self, val: f64) {
-        self.y_centroid += val;
-    }
-
-    pub fn translate_z(&mut self, val: f64) {
-        self.z_centroid += val;
-    }
-
-    // fn rotate_x(&mut self, angle: f64) {
-    //     let r: Array2<f64> = array![
-    //         [1., 0., 0.],
-    //         [0., angle.cos(), angle.sin()],
-    //         [0., -angle.sin(), angle.cos()]
-    //     ];
-    //     let rotated_vertices = (&self.vertices-self.centre()).dot(&r) + self.centre();
-    //     self.vertices = rotated_vertices;
+    // pub fn translate_x(&mut self, val: f64) {
+    //     self.x_centroid += val;
     // }
 
-    // fn rotate_y(&mut self, angle: f64) {
-    //     let r: Array2<f64> = array![
-    //         [angle.cos(), 0., -angle.sin()],
-    //         [0., 1., 0.],
-    //         [angle.sin(), 0., angle.cos()]
-    //     ];
-    //     let rotated_vertices = (&self.vertices-self.centre()).dot(&r) + self.centre();
-    //     self.vertices = rotated_vertices;
+    // pub fn translate_y(&mut self, val: f64) {
+    //     self.y_centroid += val;
     // }
 
-    // fn rotate_z(&mut self, angle: f64) {
-    //     let r: Array2<f64> = array![
-    //         [angle.cos(), angle.sin(), 0.],
-    //         [-angle.sin(), angle.cos(), 0.],
-    //         [0., 0., 1.]
-    //     ];
-    //     let rotated_vertices = (&self.vertices-self.centre()).dot(&r) + self.centre();
-    //     self.vertices = rotated_vertices;
+    // pub fn translate_z(&mut self, val: f64) {
+    //     self.z_centroid += val;
     // }
 
     /// Return verices ordered to plot a rectangle in x-z plane using egui Polygon.
     /// Assumes no rotation
     pub fn vertices_xz(&self) -> Vec<[f64; 2]> {
-        let verts = self.vertices();
-        vec![
-            [verts[[0, 0]], verts[[0, 2]]],
-            [verts[[1, 0]], verts[[1, 2]]],
-            [verts[[6, 0]], verts[[6, 2]]],
-            [verts[[4, 0]], verts[[4, 2]]],
-        ]
-    }
-    /// Return verices ordered to plot a rectangle in y-z plane using egui Polygon.
-    /// Assumes no rotation
-    pub fn vertices_yz(&self) -> Vec<[f64; 2]> {
-        let verts = self.vertices();
-        vec![
-            [verts[[0, 1]], verts[[0, 2]]],
-            [verts[[1, 1]], verts[[1, 2]]],
-            [verts[[2, 1]], verts[[2, 2]]],
-            [verts[[3, 1]], verts[[3, 2]]],
-        ]
+        let verts = (self.vertices_axis_aligned() - self.centre())
+            .dot(&rotation_matrix_x(self.x_rotation))
+            .dot(&rotation_matrix_y(self.y_rotation))
+            .dot(&rotation_matrix_z(self.z_rotation))
+            + self.centre();
+        verts
+            .slice(s![.., 0])
+            .iter()
+            .zip(verts.slice(s![.., 2]).iter())
+            .map(|(x, z)| [*x, *z])
+            .collect::<Vec<[f64; 2]>>()
     }
 
-    pub fn vertices_xy(&self) -> Vec<[f64; 2]> {
-        let verts = self.vertices();
-        vec![
-            [verts[[0, 0]], verts[[0, 1]]],
-            [verts[[2, 0]], verts[[2, 1]]],
-            [verts[[5, 0]], verts[[5, 1]]],
-            [verts[[7, 0]], verts[[7, 1]]],
-        ]
+    pub fn edge_lines_xz(&self) -> Vec<Line> {
+        let mut edges: Vec<Line> = vec![];
+        let verts = self.vertices_xz();
+        let edge_idx: [[usize; 2]; 12] = [
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 0],
+            [4, 5],
+            [5, 6],
+            [6, 7],
+            [7, 4],
+            [3, 5],
+            [4, 0],
+            [6, 2],
+            [7, 1],
+        ];
+        edge_idx
+            .iter()
+            .for_each(|[i, j]| edges.push(Line::new(vec![verts[*i], verts[*j]])));
+        edges
     }
 
     pub fn egui_input(&mut self, ui: &mut Ui) {
@@ -739,6 +864,17 @@ impl Cuboid {
 
             ui.label("z centroid");
             ui.add(egui::Slider::new(&mut self.z_centroid, -25.0..=25.0).text("m"));
+
+            ui.separator();
+
+            ui.label("x rotation");
+            ui.add(egui::Slider::new(&mut self.x_rotation, -PI / 2.0..=PI / 2.).text("rad"));
+
+            ui.label("y rotation");
+            ui.add(egui::Slider::new(&mut self.y_rotation, -PI / 2.0..=PI / 2.).text("rad"));
+
+            ui.label("z rotation");
+            ui.add(egui::Slider::new(&mut self.z_rotation, -PI / 2.0..=PI / 2.).text("rad"));
         });
         egui::CollapsingHeader::new("volume").show(ui, |ui| {
             ui.label("x length");
@@ -753,8 +889,6 @@ impl Cuboid {
                     .text("m")
                     .drag_value_speed(0.1),
             );
-            // ui.separator();
-            // ui.label(format!("Volume: {}",self.volume()));
         });
         egui::CollapsingHeader::new("density").show(ui, |ui| {
             ui.add(egui::Slider::new(&mut self.density, -3000.0..=22590.).text("kg/m^3"));
@@ -770,8 +904,6 @@ impl Cuboid {
             if ui.button("tungsten").clicked() {
                 self.density = 19300.;
             }
-            // ui.separator();
-            // ui.label(format!("Mass: {}",self.mass()));
         });
     }
 }
@@ -790,4 +922,28 @@ impl fmt::Display for Cuboid {
             self.centre()
         )
     }
+}
+
+pub fn rotation_matrix_x(angle: f64) -> Array2<f64> {
+    array![
+        [1., 0., 0.],
+        [0., angle.cos(), angle.sin()],
+        [0., -angle.sin(), angle.cos()]
+    ]
+}
+
+pub fn rotation_matrix_y(angle: f64) -> Array2<f64> {
+    array![
+        [angle.cos(), 0., -angle.sin()],
+        [0., 1., 0.],
+        [angle.sin(), 0., angle.cos()]
+    ]
+}
+
+pub fn rotation_matrix_z(angle: f64) -> Array2<f64> {
+    array![
+        [angle.cos(), angle.sin(), 0.],
+        [-angle.sin(), angle.cos(), 0.],
+        [0., 0., 1.]
+    ]
 }

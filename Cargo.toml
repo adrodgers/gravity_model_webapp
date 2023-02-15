@@ -18,6 +18,8 @@ eframe = { version = "0.20.0", default-features = false, features = [
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
 ndarray = { version = "0.15.6", features = ["rayon"] }
+# nalgebra = "0.32.1"
+# glam = "0.22.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

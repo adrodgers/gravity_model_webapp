@@ -10,7 +10,7 @@ use egui::{
 };
 use ndarray::{Array1, Array2, Axis};
 
-const MAX_OBJECTS: usize = 100;
+const MAX_OBJECTS: usize = 10;
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct Model {
     objects: BTreeMap<String, Option<GravityObject>>,
@@ -24,7 +24,11 @@ impl Default for Model {
         objects.insert("None".to_string(), None);
         let mut groups: BTreeMap<String, Option<BTreeSet<String>>> = BTreeMap::new();
         groups.insert("None".to_string(), None);
-        Self { objects, groups, object_counter: 0 }
+        Self {
+            objects,
+            groups,
+            object_counter: 0,
+        }
     }
 }
 
@@ -210,24 +214,23 @@ impl Model {
     }
 
     pub fn copy_selected(&mut self) {
-        for id in self.selected_object_ids() {
-            // println!("Object: {}", id);
-            let object = self.objects.get(&id.to_string()).unwrap().clone().unwrap();
-            // println!("Object: {:?}", object);
-            let new_object = match object {
-                GravityObject::Cuboid(cuboid) => GravityObject::Cuboid(Cuboid {
-                    // name: format!("{}_copy", cuboid.name),
-                    id: self.object_counter,
-                    ..cuboid
-                }),
-                GravityObject::Sphere(sphere) => GravityObject::Sphere(Sphere {
-                    // name: format!("{}_copy", sphere.name),
-                    id: self.object_counter,
-                    ..sphere
-                }),
-            };
-            println!("New Object: {:?}", new_object);
-            self.add_object(new_object);
+        if (self.objects.len() + self.number_objects_selected() as usize) < MAX_OBJECTS {
+            for id in self.selected_object_ids() {
+                let object = self.objects.get(&id.to_string()).unwrap().clone().unwrap();
+                let new_object = match object {
+                    GravityObject::Cuboid(cuboid) => GravityObject::Cuboid(Cuboid {
+                        // name: format!("{}_copy", cuboid.name),
+                        id: self.object_counter,
+                        ..cuboid
+                    }),
+                    GravityObject::Sphere(sphere) => GravityObject::Sphere(Sphere {
+                        // name: format!("{}_copy", sphere.name),
+                        id: self.object_counter,
+                        ..sphere
+                    }),
+                };
+                self.add_object(new_object);
+            }
         }
     }
 
@@ -235,12 +238,20 @@ impl Model {
         // let object = add_object.create();
         if self.objects.len() < MAX_OBJECTS {
             match object {
-                GravityObject::Cuboid(cuboid) => self.objects.insert(cuboid.id.to_string(),
-                    Some(GravityObject::Cuboid(Cuboid{id:self.object_counter, ..cuboid}))
-                    ),
-                GravityObject::Sphere(sphere) => self.objects.insert(sphere.id.to_string(),
-                    Some(GravityObject::Sphere(Sphere{id:self.object_counter, ..sphere}))
-                    ),
+                GravityObject::Cuboid(cuboid) => self.objects.insert(
+                    cuboid.id.to_string(),
+                    Some(GravityObject::Cuboid(Cuboid {
+                        id: self.object_counter,
+                        ..cuboid
+                    })),
+                ),
+                GravityObject::Sphere(sphere) => self.objects.insert(
+                    sphere.id.to_string(),
+                    Some(GravityObject::Sphere(Sphere {
+                        id: self.object_counter,
+                        ..sphere
+                    })),
+                ),
             };
             self.object_counter += 1;
         }
@@ -435,8 +446,20 @@ impl eframe::App for GravityBuilderApp {
             ui.color_edit_button_srgba(&mut add_object.colour);
             if ui.button("Create object").clicked() {
                 let object = match add_object.object_type {
-                    GravityObject::Cuboid(_) => GravityObject::Cuboid(Cuboid { id: model.object_counter, name: add_object.name.to_string(), colour: add_object.colour, is_selected: true, ..Default::default() }),
-                    GravityObject::Sphere(_) => GravityObject::Sphere(Sphere { id: model.object_counter, name: add_object.name.to_string(), colour: add_object.colour, is_selected: true, ..Default::default() }),
+                    GravityObject::Cuboid(_) => GravityObject::Cuboid(Cuboid {
+                        id: model.object_counter,
+                        name: add_object.name.to_string(),
+                        colour: add_object.colour,
+                        is_selected: true,
+                        ..Default::default()
+                    }),
+                    GravityObject::Sphere(_) => GravityObject::Sphere(Sphere {
+                        id: model.object_counter,
+                        name: add_object.name.to_string(),
+                        colour: add_object.colour,
+                        is_selected: true,
+                        ..Default::default()
+                    }),
                 };
                 model.add_object(object);
             }
@@ -462,10 +485,16 @@ impl eframe::App for GravityBuilderApp {
                     match object {
                         Some(obj) => match obj {
                             GravityObject::Cuboid(cuboid) => {
-                                ui.checkbox(&mut cuboid.is_selected, format!("{}: {}",cuboid.id, cuboid.name.to_string()));
+                                ui.checkbox(
+                                    &mut cuboid.is_selected,
+                                    format!("{}: {}", cuboid.id, cuboid.name.to_string()),
+                                );
                             }
                             GravityObject::Sphere(sphere) => {
-                                ui.checkbox(&mut sphere.is_selected, format!("{}: {}",sphere.id, sphere.name.to_string()));
+                                ui.checkbox(
+                                    &mut sphere.is_selected,
+                                    format!("{}: {}", sphere.id, sphere.name.to_string()),
+                                );
                             }
                         },
                         None => {}
@@ -667,7 +696,7 @@ impl eframe::App for GravityBuilderApp {
             let mut data_total: Array1<f64> = Array1::zeros(measurement_points.len_of(Axis(0)));
             ui.horizontal(|ui| {
                 data_plot.show(ui, |plot_ui| {
-                    for (key, object) in model.objects.iter() {
+                    for (_, object) in model.objects.iter() {
                         match object {
                             Some(obj) => match obj {
                                 GravityObject::Cuboid(cuboid) => {
@@ -682,9 +711,13 @@ impl eframe::App for GravityBuilderApp {
                                         .collect();
                                     let line = Line::new(data_2d);
                                     plot_ui.line(
-                                        line.name(key)
-                                            .color(cuboid.colour)
-                                            .highlight(cuboid.is_selected),
+                                        line.name(format!(
+                                            "{}: {}",
+                                            cuboid.id,
+                                            cuboid.name.to_string()
+                                        ))
+                                        .color(cuboid.colour)
+                                        .highlight(cuboid.is_selected),
                                     );
                                     data_total = data_total + &data;
                                 }
@@ -701,9 +734,13 @@ impl eframe::App for GravityBuilderApp {
                                     let line = Line::new(data_2d);
                                     // let line = sphere.egui_data_plot_line(data);
                                     plot_ui.line(
-                                        line.name(key)
-                                            .color(sphere.colour)
-                                            .highlight(sphere.is_selected),
+                                        line.name(format!(
+                                            "{}: {}",
+                                            sphere.id,
+                                            sphere.name.to_string()
+                                        ))
+                                        .color(sphere.colour)
+                                        .highlight(sphere.is_selected),
                                     );
                                     data_total = data_total + &data;
                                 }
@@ -746,14 +783,33 @@ impl eframe::App for GravityBuilderApp {
                             match object {
                                 Some(obj) => match obj {
                                     GravityObject::Cuboid(cuboid) => {
-                                        let polygon =
-                                            Polygon::new(PlotPoints::from(cuboid.vertices_xz()));
-                                        plot_ui.polygon(
-                                            polygon
-                                                .name(id)
+                                        // let plot_points : Vec<[f64; 2]> = cuboid.vertices_xz();
+                                        // plot_ui.points(
+                                        //     Points::new(plot_points)
+                                        //         .name("verts")
+                                        //         .color(Color32::WHITE),
+                                        // );
+                                        let edge_lines = cuboid.edge_lines_xz();
+                                        for edge in edge_lines {
+                                            plot_ui.line(
+                                                edge.name(format!(
+                                                    "{}: {}",
+                                                    cuboid.id,
+                                                    cuboid.name.to_string()
+                                                ))
                                                 .color(cuboid.colour)
                                                 .highlight(cuboid.is_selected),
-                                        );
+                                            );
+                                        }
+
+                                        // let polygon =
+                                        //     Polygon::new(PlotPoints::from(cuboid.vertices_xz()));
+                                        // plot_ui.polygon(
+                                        //     polygon
+                                        //         .name(id)
+                                        //         .color(cuboid.colour)
+                                        //         .highlight(cuboid.is_selected),
+                                        // );
                                     }
                                     GravityObject::Sphere(sphere) => {
                                         let polygon =
@@ -769,7 +825,11 @@ impl eframe::App for GravityBuilderApp {
                                             ));
                                         plot_ui.polygon(
                                             polygon
-                                                .name(id)
+                                                .name(format!(
+                                                    "{}: {}",
+                                                    sphere.id,
+                                                    sphere.name.to_string()
+                                                ))
                                                 .color(sphere.colour)
                                                 .highlight(sphere.is_selected),
                                         );
