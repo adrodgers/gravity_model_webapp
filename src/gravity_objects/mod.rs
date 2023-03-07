@@ -4,25 +4,7 @@ use ndarray::prelude::*;
 use std::f64::consts::PI;
 use std::fmt;
 
-// use crate::app::MeasurementParameters;
-// use assert_approx_eq::assert_approx_eq;
-// use ndarray::arr2;
-// use rayon::prelude::*;
-// use std::time::Instant;
-// #![feature(const_trait_impl)]
-
 const G: f64 = 6.674e-11;
-
-// pub struct Group {
-//     id: String,
-//     members: HashSet<String>
-// }
-
-// impl Default for Group {
-//     fn default() -> Self {
-//         Self { id: String::new(), members: HashSet::new()}
-//     }
-// }
 
 /// Required methods to define a new gravity object, to be used within a gravity model.
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq)]
@@ -31,48 +13,120 @@ pub enum GravityObject {
     Sphere(Sphere),
 }
 
-impl GravityInfo for GravityObject {
-    fn get_density(&self) -> f64 {
-        match self {
-            GravityObject::Cuboid(cuboid) => cuboid.density,
-            GravityObject::Sphere(sphere) => sphere.density,
-        }
-    }
-
-    fn get_name(&self) -> String {
-        match self {
-            GravityObject::Cuboid(cuboid) => cuboid.name.to_string(),
-            GravityObject::Sphere(sphere) => sphere.name.to_string(),
-        }
-    }
-
-    fn is_selected(&self) -> bool {
-        match self {
-            GravityObject::Cuboid(cuboid) => cuboid.is_selected,
-            GravityObject::Sphere(sphere) => sphere.is_selected,
-        }
-    }
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct GravityModelObject {
+    pub object: GravityObject,
+    pub name: String,
+    pub id: u128,
+    pub colour: Color32,
+    pub is_selected: bool,
 }
 
-// pub enum GravityObject {
-//     Cuboid,
-//     Sphere
-// }
+pub trait InputUI {
+    fn ui(&mut self, ui: &mut Ui);
+}
 
-pub trait GravityInfo {
-    // fn volume(&self) -> f64;
+impl InputUI for GravityModelObject {
+    fn ui(&mut self, ui: &mut Ui) {
+        ui.text_edit_singleline(&mut self.name);
+        ui.color_edit_button_srgba(&mut self.colour);
 
-    // fn mass(&self) -> f64;
+        match &mut self.object {
+            GravityObject::Cuboid(cuboid) => {
+                egui::CollapsingHeader::new("position").show(ui, |ui| {
+                    ui.label("x centroid");
+                    ui.add(egui::Slider::new(&mut cuboid.x_centroid, -50.0..=50.0).text("m"));
 
-    fn get_density(&self) -> f64;
+                    ui.label("y centroid");
+                    ui.add(egui::Slider::new(&mut cuboid.y_centroid, -50.0..=50.0).text("m"));
 
-    fn get_name(&self) -> String;
+                    ui.label("z centroid");
+                    ui.add(egui::Slider::new(&mut cuboid.z_centroid, -25.0..=25.0).text("m"));
 
-    fn is_selected(&self) -> bool;
+                    ui.separator();
+
+                    ui.label("x rotation");
+                    ui.add(
+                        egui::Slider::new(&mut cuboid.x_rotation, -PI / 2.0..=PI / 2.).text("rad"),
+                    );
+
+                    ui.label("y rotation");
+                    ui.add(
+                        egui::Slider::new(&mut cuboid.y_rotation, -PI / 2.0..=PI / 2.).text("rad"),
+                    );
+
+                    ui.label("z rotation");
+                    ui.add(
+                        egui::Slider::new(&mut cuboid.z_rotation, -PI / 2.0..=PI / 2.).text("rad"),
+                    );
+                });
+                egui::CollapsingHeader::new("volume").show(ui, |ui| {
+                    ui.label("x length");
+                    ui.add(egui::Slider::new(&mut cuboid.x_length, 0.1..=100.0).text("m"));
+
+                    ui.label("y length");
+                    ui.add(egui::Slider::new(&mut cuboid.y_length, 0.1..=100.0).text("m"));
+
+                    ui.label("z length");
+                    ui.add(
+                        egui::Slider::new(&mut cuboid.z_length, 0.1..=25.0)
+                            .text("m")
+                            .drag_value_speed(0.1),
+                    );
+                });
+                egui::CollapsingHeader::new("density").show(ui, |ui| {
+                    ui.add(egui::Slider::new(&mut cuboid.density, -3000.0..=22590.).text("kg/m^3"));
+                    if ui.button("soil void").clicked() {
+                        cuboid.density = -1800.;
+                    }
+                    if ui.button("concrete").clicked() {
+                        cuboid.density = 2000.;
+                    }
+                    if ui.button("lead").clicked() {
+                        cuboid.density = 11340.;
+                    }
+                    if ui.button("tungsten").clicked() {
+                        cuboid.density = 19300.;
+                    }
+                });
+            }
+            GravityObject::Sphere(sphere) => {
+                egui::CollapsingHeader::new("position").show(ui, |ui| {
+                    ui.label("x centroid");
+                    ui.add(egui::Slider::new(&mut sphere.x_centroid, -50.0..=50.0).text("m"));
+
+                    ui.label("y centroid");
+                    ui.add(egui::Slider::new(&mut sphere.y_centroid, -50.0..=50.0).text("m"));
+
+                    ui.label("z centroid");
+                    ui.add(egui::Slider::new(&mut sphere.z_centroid, -25.0..=25.0).text("m"));
+                });
+                egui::CollapsingHeader::new("volume").show(ui, |ui| {
+                    ui.label("radius");
+                    ui.add(egui::Slider::new(&mut sphere.radius, 0.1..=100.0).text("m"));
+                });
+                egui::CollapsingHeader::new("density").show(ui, |ui| {
+                    ui.add(egui::Slider::new(&mut sphere.density, -3000.0..=22590.).text("kg/m^3"));
+                    if ui.button("soil void").clicked() {
+                        sphere.density = -1800.;
+                    }
+                    if ui.button("concrete").clicked() {
+                        sphere.density = 2000.;
+                    }
+                    if ui.button("lead").clicked() {
+                        sphere.density = 11340.;
+                    }
+                    if ui.button("tungsten").clicked() {
+                        sphere.density = 19300.;
+                    }
+                });
+            }
+        }
+    }
 }
 
 pub trait GravityCalc {
-    // fn calculate(&self, data_type: &DataType, measurement_points: &Array2<f64>) -> Array1<f64>;
+    fn calculate(&self, data_type: &DataType, points: &Array2<f64>) -> Array1<f64>;
 
     fn g(&self, position: &Array1<f64>) -> Array1<f64>;
 
@@ -123,10 +177,6 @@ pub struct Sphere {
     pub z_centroid: f64,
     pub radius: f64,
     pub density: f64,
-    pub name: String,
-    pub id: u128,
-    pub colour: Color32,
-    pub is_selected: bool,
 }
 
 impl Default for Sphere {
@@ -137,18 +187,66 @@ impl Default for Sphere {
             z_centroid: -1.,
             radius: 1.,
             density: -2000.,
-            colour: Color32::RED,
-            name: "Default".to_string(),
-            id: 0,
-            is_selected: false,
         }
     }
 }
 
 impl GravityCalc for Sphere {
-    // fn calculate(&self, data_type: &DataType, measurement_points: &Array2<f64>) -> Array1<f64> {
-    //     todo!()
-    // }
+    fn calculate(&self, data_type: &DataType, points: &Array2<f64>) -> Array1<f64> {
+        let mut data: Array1<f64> = Array1::zeros(points.len_of(Axis(0)));
+        let scaling = match data_type {
+            DataType::Gx | DataType::Gy | DataType::Gz => -1E8,
+            _ => 1E9,
+        };
+        match data_type {
+            DataType::Gx => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gx(&point.to_owned())
+                }
+            }
+            DataType::Gy => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gy(&point.to_owned())
+                }
+            }
+            DataType::Gz => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gz(&point.to_owned())
+                }
+            }
+            DataType::Gxx => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gxx(&point.to_owned())
+                }
+            }
+            DataType::Gxy => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gxy(&point.to_owned())
+                }
+            }
+            DataType::Gxz => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gxz(&point.to_owned())
+                }
+            }
+            DataType::Gyy => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gyy(&point.to_owned())
+                }
+            }
+            DataType::Gyz => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gyz(&point.to_owned())
+                }
+            }
+            DataType::Gzz => {
+                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
+                    data[i] += self.gzz(&point.to_owned())
+                }
+            }
+        }
+        data * scaling
+    }
 
     fn g(&self, position: &Array1<f64>) -> Array1<f64> {
         todo!()
@@ -262,111 +360,6 @@ impl GravityCalc for Sphere {
     fn centre(&self) -> Array1<f64> {
         Array1::from(vec![self.x_centroid, self.y_centroid, self.z_centroid])
     }
-
-    // fn get_density(&self) -> f64 {
-    //     self.density
-    // }
-
-    // fn get_id(&self) -> String {
-    //     self.id
-    // }
-}
-
-impl Sphere {
-    pub fn calculate(&self, data_type: &DataType, points: &Array2<f64>) -> Array1<f64> {
-        let mut data: Array1<f64> = Array1::zeros(points.len_of(Axis(0)));
-        let scaling = match data_type {
-            DataType::Gx | DataType::Gy | DataType::Gz => -1E8,
-            _ => 1E9,
-        };
-        match data_type {
-            DataType::Gx => {
-                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gx(&point.to_owned())
-                }
-            }
-            DataType::Gy => {
-                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gy(&point.to_owned())
-                }
-            }
-            DataType::Gz => {
-                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gz(&point.to_owned())
-                }
-            }
-            DataType::Gxx => {
-                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gxx(&point.to_owned())
-                }
-            }
-            DataType::Gxy => {
-                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gxy(&point.to_owned())
-                }
-            }
-            DataType::Gxz => {
-                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gxz(&point.to_owned())
-                }
-            }
-            DataType::Gyy => {
-                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gyy(&point.to_owned())
-                }
-            }
-            DataType::Gyz => {
-                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gyz(&point.to_owned())
-                }
-            }
-            DataType::Gzz => {
-                for (i, point) in points.axis_iter(Axis(0)).enumerate() {
-                    data[i] += self.gzz(&point.to_owned())
-                }
-            }
-        }
-        data * scaling
-    }
-}
-
-impl Sphere {
-    pub fn egui_input(&mut self, ui: &mut Ui) {
-        egui::CollapsingHeader::new("position").show(ui, |ui| {
-            ui.label("x centroid");
-            ui.add(egui::Slider::new(&mut self.x_centroid, -50.0..=50.0).text("m"));
-
-            ui.label("y centroid");
-            ui.add(egui::Slider::new(&mut self.y_centroid, -50.0..=50.0).text("m"));
-
-            ui.label("z centroid");
-            ui.add(egui::Slider::new(&mut self.z_centroid, -25.0..=25.0).text("m"));
-        });
-        egui::CollapsingHeader::new("volume").show(ui, |ui| {
-            ui.label("radius");
-            ui.add(egui::Slider::new(&mut self.radius, 0.1..=100.0).text("m"));
-
-            // ui.separator();
-            // ui.label(format!("Volume: {}",self.volume()));
-        });
-        egui::CollapsingHeader::new("density").show(ui, |ui| {
-            ui.add(egui::Slider::new(&mut self.density, -3000.0..=22590.).text("kg/m^3"));
-            if ui.button("soil void").clicked() {
-                self.density = -1800.;
-            }
-            if ui.button("concrete").clicked() {
-                self.density = 2000.;
-            }
-            if ui.button("lead").clicked() {
-                self.density = 11340.;
-            }
-            if ui.button("tungsten").clicked() {
-                self.density = 19300.;
-            }
-            // ui.separator();
-            // ui.label(format!("Mass: {}",self.mass()));
-        });
-    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq)]
@@ -382,10 +375,6 @@ pub struct Cuboid {
     pub y_rotation: f64,
     pub z_rotation: f64,
     pub density: f64,
-    pub name: String,
-    pub id: u128,
-    pub colour: Color32,
-    pub is_selected: bool,
 }
 
 impl Default for Cuboid {
@@ -411,16 +400,12 @@ impl Default for Cuboid {
             y_rotation: 0.,
             z_rotation: 0.,
             density: -2000.,
-            colour: Color32::RED,
-            name: "Default".to_string(),
-            id: 0,
-            is_selected: false,
         }
     }
 }
 
-impl Cuboid {
-    pub fn calculate(&self, data_type: &DataType, points: &Array2<f64>) -> Array1<f64> {
+impl GravityCalc for Cuboid {
+    fn calculate(&self, data_type: &DataType, points: &Array2<f64>) -> Array1<f64> {
         let rotated_points = (points - self.centre())
             .dot(&rotation_matrix_z(-self.z_rotation))
             .dot(&rotation_matrix_y(-self.y_rotation))
@@ -488,9 +473,7 @@ impl Cuboid {
         }
         data * scaling
     }
-}
 
-impl GravityCalc for Cuboid {
     fn gx(&self, position: &Array1<f64>) -> f64 {
         let mut gx = 0.;
         let verts = self.vertices_axis_aligned();
@@ -708,14 +691,6 @@ impl GravityCalc for Cuboid {
     fn centre(&self) -> Array1<f64> {
         Array1::from(vec![self.x_centroid, self.y_centroid, self.z_centroid])
     }
-
-    // fn get_density(&self) -> f64 {
-    //     self.density
-    // }
-
-    // fn get_id(&self) -> String {
-    //     self.id
-    // }
 }
 
 impl Cuboid {
@@ -730,10 +705,6 @@ impl Cuboid {
         y_rotation: f64,
         z_rotation: f64,
         density: f64,
-        id: u128,
-        name: String,
-        colour: Color32,
-        is_selected: bool,
     ) -> Cuboid {
         Cuboid {
             x_length,
@@ -746,10 +717,6 @@ impl Cuboid {
             y_rotation,
             z_rotation,
             density: density,
-            id: id,
-            name: name,
-            colour: colour,
-            is_selected: is_selected,
         }
     }
 
@@ -803,18 +770,6 @@ impl Cuboid {
         ]
     }
 
-    // pub fn translate_x(&mut self, val: f64) {
-    //     self.x_centroid += val;
-    // }
-
-    // pub fn translate_y(&mut self, val: f64) {
-    //     self.y_centroid += val;
-    // }
-
-    // pub fn translate_z(&mut self, val: f64) {
-    //     self.z_centroid += val;
-    // }
-
     /// Return verices ordered to plot a rectangle in x-z plane using egui Polygon.
     /// Assumes no rotation
     pub fn vertices_xz(&self) -> Vec<[f64; 2]> {
@@ -852,59 +807,6 @@ impl Cuboid {
             .iter()
             .for_each(|[i, j]| edges.push(Line::new(vec![verts[*i], verts[*j]])));
         edges
-    }
-
-    pub fn egui_input(&mut self, ui: &mut Ui) {
-        egui::CollapsingHeader::new("position").show(ui, |ui| {
-            ui.label("x centroid");
-            ui.add(egui::Slider::new(&mut self.x_centroid, -50.0..=50.0).text("m"));
-
-            ui.label("y centroid");
-            ui.add(egui::Slider::new(&mut self.y_centroid, -50.0..=50.0).text("m"));
-
-            ui.label("z centroid");
-            ui.add(egui::Slider::new(&mut self.z_centroid, -25.0..=25.0).text("m"));
-
-            ui.separator();
-
-            ui.label("x rotation");
-            ui.add(egui::Slider::new(&mut self.x_rotation, -PI / 2.0..=PI / 2.).text("rad"));
-
-            ui.label("y rotation");
-            ui.add(egui::Slider::new(&mut self.y_rotation, -PI / 2.0..=PI / 2.).text("rad"));
-
-            ui.label("z rotation");
-            ui.add(egui::Slider::new(&mut self.z_rotation, -PI / 2.0..=PI / 2.).text("rad"));
-        });
-        egui::CollapsingHeader::new("volume").show(ui, |ui| {
-            ui.label("x length");
-            ui.add(egui::Slider::new(&mut self.x_length, 0.1..=100.0).text("m"));
-
-            ui.label("y length");
-            ui.add(egui::Slider::new(&mut self.y_length, 0.1..=100.0).text("m"));
-
-            ui.label("z length");
-            ui.add(
-                egui::Slider::new(&mut self.z_length, 0.1..=25.0)
-                    .text("m")
-                    .drag_value_speed(0.1),
-            );
-        });
-        egui::CollapsingHeader::new("density").show(ui, |ui| {
-            ui.add(egui::Slider::new(&mut self.density, -3000.0..=22590.).text("kg/m^3"));
-            if ui.button("soil void").clicked() {
-                self.density = -1800.;
-            }
-            if ui.button("concrete").clicked() {
-                self.density = 2000.;
-            }
-            if ui.button("lead").clicked() {
-                self.density = 11340.;
-            }
-            if ui.button("tungsten").clicked() {
-                self.density = 19300.;
-            }
-        });
     }
 }
 
