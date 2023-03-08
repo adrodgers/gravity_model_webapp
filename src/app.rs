@@ -1,6 +1,11 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
+    env::current_dir,
+    error::Error,
     f64::consts::TAU,
+    fs::{self, create_dir, File},
+    io::BufReader,
+    path::Path,
 };
 
 use crate::gravity_objects::{
@@ -11,14 +16,15 @@ use egui::{
     Color32, Key, Pos2,
 };
 use ndarray::{Array1, Array2, Axis};
+// use serde::Serialize;
 
 const MAX_OBJECTS: usize = 10;
 
-enum PlotView {
-    XY,
-    XZ,
-    YZ,
-}
+// enum PlotView {
+//     XY,
+//     XZ,
+//     YZ,
+// }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct Model {
@@ -85,13 +91,6 @@ impl Model {
                         {
                             obj.is_selected = !obj.is_selected;
                         }
-                        // if (cuboid.x_centroid - cuboid.x_length / 2.) < pointer_pos.x as f64
-                        //     && (cuboid.x_centroid + cuboid.x_length / 2.) > pointer_pos.x as f64
-                        //     && (cuboid.z_centroid + cuboid.z_length / 2.) > pointer_pos.y as f64
-                        //     && (cuboid.z_centroid - cuboid.z_length / 2.) < pointer_pos.y as f64
-                        // {
-                        //     obj.is_selected = !obj.is_selected;
-                        // }
                     }
                     GravityObject::Sphere(sphere) => {
                         if ((sphere.x_centroid - pointer_pos.x as f64).powi(2)
@@ -108,7 +107,7 @@ impl Model {
         }
     }
 
-    fn translate_selected(&mut self, plot_ui: &mut PlotUi) {
+    fn translate_selected_xz(&mut self, plot_ui: &mut PlotUi) {
         for (_, object) in self.objects.iter_mut() {
             let pointer_delta = plot_ui.pointer_coordinate_drag_delta();
             match object {
@@ -131,7 +130,7 @@ impl Model {
         }
     }
 
-    fn scale_selected(&mut self, plot_ui: &mut PlotUi) {
+    fn scale_selected_xz(&mut self, plot_ui: &mut PlotUi) {
         for (_, object) in self.objects.iter_mut() {
             let pointer_delta = plot_ui.pointer_coordinate_drag_delta();
             match object {
@@ -300,6 +299,25 @@ impl eframe::App for GravityBuilderApp {
                 ui.menu_button("File", |ui| {
                     if ui.button("Quit").clicked() {
                         _frame.close();
+                    }
+                });
+                ui.menu_button("Edit", |ui| {
+                    if ui.button("Save").clicked() {
+                        let data = serde_json::to_string(&model).unwrap();
+                        let path = current_dir().unwrap();
+                        let mut new_path = path.join("models");
+                        create_dir(&new_path).unwrap();
+                        new_path.push("test");
+                        new_path.set_extension("json");
+                        fs::write(new_path, data).expect("Unable to write file");
+                    }
+                    if ui.button("Load").clicked() {
+                        if let Some(path) = rfd::FileDialog::new().pick_file() {
+                            // self.state = AppState::load_from_file(path).unwrap();
+                            if let Ok(loaded_model) = read_model_from_file(path) {
+                                *model = loaded_model;
+                            }
+                        }
                     }
                 });
             });
@@ -592,11 +610,13 @@ impl eframe::App for GravityBuilderApp {
                                             ));
                                         plot_ui.polygon(
                                             polygon
-                                                // .name(format!(
-                                                //     "{}: {}",
-                                                //     obj.id,
-                                                //     obj.name.to_string()
-                                                // ))
+                                                .name(format!(
+                                                    "{}: {}",
+                                                    obj.id,
+                                                    obj.name.to_string()
+                                                ))
+                                                .style(LineStyle::Dashed { length: 5. })
+                                                .fill_alpha(0.)
                                                 .color(obj.colour)
                                                 .highlight(obj.is_selected),
                                         );
@@ -641,14 +661,14 @@ impl eframe::App for GravityBuilderApp {
                         }
 
                         if plot_ui.plot_hovered() && ctx.input().key_down(Key::M) {
-                            model.translate_selected(plot_ui);
+                            model.translate_selected_xz(plot_ui);
                         }
 
                         if plot_ui.plot_hovered()
                             && ctx.input().key_down(Key::L)
                             && model.number_objects_selected() == 1
                         {
-                            model.scale_selected(plot_ui);
+                            model.scale_selected_xz(plot_ui);
                         }
                     })
                     .response;
@@ -680,4 +700,16 @@ impl eframe::App for GravityBuilderApp {
             // });
         });
     }
+}
+
+fn read_model_from_file<P: AsRef<Path>>(path: P) -> Result<Model, Box<dyn Error>> {
+    // Open the file in read-only mode with buffer.
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    // Read the JSON contents of the file as an instance of `User`.
+    let u = serde_json::from_reader(reader)?;
+
+    // Return the `User`.
+    Ok(u)
 }

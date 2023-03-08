@@ -42,9 +42,9 @@ impl InputUI for GravityModelObject {
 
                     ui.label("z centroid");
                     ui.add(egui::Slider::new(&mut cuboid.z_centroid, -25.0..=25.0).text("m"));
+                });
 
-                    ui.separator();
-
+                egui::CollapsingHeader::new("rotation").show(ui, |ui| {
                     ui.label("x rotation");
                     ui.add(
                         egui::Slider::new(&mut cuboid.x_rotation, -PI / 2.0..=PI / 2.).text("rad"),
@@ -60,6 +60,7 @@ impl InputUI for GravityModelObject {
                         egui::Slider::new(&mut cuboid.z_rotation, -PI / 2.0..=PI / 2.).text("rad"),
                     );
                 });
+
                 egui::CollapsingHeader::new("volume").show(ui, |ui| {
                     ui.label("x length");
                     ui.add(egui::Slider::new(&mut cuboid.x_length, 0.1..=100.0).text("m"));
