@@ -13,21 +13,23 @@ use crate::gravity_objects::{
 };
 use egui::{
     plot::{Legend, Line, LineStyle, LinkedAxisGroup, Plot, PlotPoints, PlotUi, Points, Polygon},
-    Color32, Key, Pos2,
+    Color32, Context, Key, Pos2, Style, Ui, Visuals,
 };
 use ndarray::{Array1, Array2, Axis};
 // use serde::Serialize;
 
 const MAX_OBJECTS: usize = 10;
 
-// enum PlotView {
-//     XY,
-//     XZ,
-//     YZ,
-// }
+#[derive(serde::Deserialize, serde::Serialize, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PlotView {
+    XY,
+    XZ,
+    YZ,
+}
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct Model {
+    name: String,
     objects: BTreeMap<String, Option<GravityModelObject>>,
     groups: BTreeMap<String, Option<BTreeSet<String>>>,
     object_counter: u128,
@@ -40,6 +42,7 @@ impl Default for Model {
         let mut groups: BTreeMap<String, Option<BTreeSet<String>>> = BTreeMap::new();
         groups.insert("None".to_string(), None);
         Self {
+            name: "Default".to_string(),
             objects,
             groups,
             object_counter: 0,
@@ -78,14 +81,19 @@ impl Model {
         selected_object_ids
     }
 
-    pub fn select_by_click_xz(&mut self, plot_ui: &mut PlotUi) {
+    pub fn select_by_click(&mut self, plot_ui: &mut PlotUi, plot_view: &mut PlotView) {
         for (_, object) in self.objects.iter_mut() {
             let pointer_pos = plot_ui.pointer_coordinate().unwrap();
             match object {
                 Some(obj) => match &obj.object {
                     GravityObject::Cuboid(cuboid) => {
-                        if ((cuboid.x_centroid - pointer_pos.x as f64).powi(2)
-                            + (cuboid.z_centroid - pointer_pos.y as f64).powi(2))
+                        let pos: [f64; 2] = match plot_view {
+                            PlotView::XY => [cuboid.x_centroid, cuboid.y_centroid],
+                            PlotView::XZ => [cuboid.x_centroid, cuboid.z_centroid],
+                            PlotView::YZ => [cuboid.y_centroid, cuboid.z_centroid],
+                        };
+                        if ((pos[0] - pointer_pos.x as f64).powi(2)
+                            + (pos[1] - pointer_pos.y as f64).powi(2))
                         .sqrt()
                             < 0.5
                         {
@@ -93,8 +101,13 @@ impl Model {
                         }
                     }
                     GravityObject::Sphere(sphere) => {
-                        if ((sphere.x_centroid - pointer_pos.x as f64).powi(2)
-                            + (sphere.z_centroid - pointer_pos.y as f64).powi(2))
+                        let pos: [f64; 2] = match plot_view {
+                            PlotView::XY => [sphere.x_centroid, sphere.y_centroid],
+                            PlotView::XZ => [sphere.x_centroid, sphere.z_centroid],
+                            PlotView::YZ => [sphere.y_centroid, sphere.z_centroid],
+                        };
+                        if ((pos[0] - pointer_pos.x as f64).powi(2)
+                            + (pos[1] - pointer_pos.y as f64).powi(2))
                         .sqrt()
                             < sphere.radius
                         {
@@ -107,21 +120,45 @@ impl Model {
         }
     }
 
-    fn translate_selected_xz(&mut self, plot_ui: &mut PlotUi) {
+    fn translate_selected(&mut self, plot_ui: &mut PlotUi, plot_view: &mut PlotView) {
         for (_, object) in self.objects.iter_mut() {
             let pointer_delta = plot_ui.pointer_coordinate_drag_delta();
             match object {
                 Some(obj) => match &mut obj.object {
                     GravityObject::Cuboid(cuboid) => {
                         if obj.is_selected {
-                            cuboid.x_centroid += pointer_delta.x as f64;
-                            cuboid.z_centroid += pointer_delta.y as f64;
+                            match plot_view {
+                                PlotView::XY => {
+                                    cuboid.x_centroid += pointer_delta.x as f64;
+                                    cuboid.y_centroid += pointer_delta.y as f64;
+                                }
+                                PlotView::XZ => {
+                                    cuboid.x_centroid += pointer_delta.x as f64;
+                                    cuboid.z_centroid += pointer_delta.y as f64;
+                                }
+                                PlotView::YZ => {
+                                    cuboid.y_centroid += pointer_delta.x as f64;
+                                    cuboid.z_centroid += pointer_delta.y as f64;
+                                }
+                            };
                         }
                     }
                     GravityObject::Sphere(sphere) => {
                         if obj.is_selected {
-                            sphere.x_centroid += pointer_delta.x as f64;
-                            sphere.z_centroid += pointer_delta.y as f64;
+                            match plot_view {
+                                PlotView::XY => {
+                                    sphere.x_centroid += pointer_delta.x as f64;
+                                    sphere.y_centroid += pointer_delta.y as f64;
+                                }
+                                PlotView::XZ => {
+                                    sphere.x_centroid += pointer_delta.x as f64;
+                                    sphere.z_centroid += pointer_delta.y as f64;
+                                }
+                                PlotView::YZ => {
+                                    sphere.y_centroid += pointer_delta.x as f64;
+                                    sphere.z_centroid += pointer_delta.y as f64;
+                                }
+                            };
                         }
                     }
                 },
@@ -130,19 +167,39 @@ impl Model {
         }
     }
 
-    fn scale_selected_xz(&mut self, plot_ui: &mut PlotUi) {
+    fn scale_selected(&mut self, plot_ui: &mut PlotUi, plot_view: &mut PlotView) {
         for (_, object) in self.objects.iter_mut() {
             let pointer_delta = plot_ui.pointer_coordinate_drag_delta();
             match object {
                 Some(obj) => match &mut obj.object {
                     GravityObject::Cuboid(cuboid) => {
                         if obj.is_selected {
-                            if (cuboid.x_length + pointer_delta.x as f64) > 0. {
-                                cuboid.x_length += pointer_delta.x as f64;
-                            }
-                            if (cuboid.z_length + pointer_delta.y as f64) > 0. {
-                                cuboid.z_length += pointer_delta.y as f64;
-                            }
+                            match plot_view {
+                                PlotView::XY => {
+                                    if (cuboid.x_length + pointer_delta.x as f64) > 0. {
+                                        cuboid.x_length += pointer_delta.x as f64;
+                                    }
+                                    if (cuboid.y_length + pointer_delta.y as f64) > 0. {
+                                        cuboid.y_length += pointer_delta.y as f64;
+                                    }
+                                }
+                                PlotView::XZ => {
+                                    if (cuboid.x_length + pointer_delta.x as f64) > 0. {
+                                        cuboid.x_length += pointer_delta.x as f64;
+                                    }
+                                    if (cuboid.z_length + pointer_delta.y as f64) > 0. {
+                                        cuboid.z_length += pointer_delta.y as f64;
+                                    }
+                                }
+                                PlotView::YZ => {
+                                    if (cuboid.y_length + pointer_delta.x as f64) > 0. {
+                                        cuboid.y_length += pointer_delta.x as f64;
+                                    }
+                                    if (cuboid.z_length + pointer_delta.y as f64) > 0. {
+                                        cuboid.z_length += pointer_delta.y as f64;
+                                    }
+                                }
+                            };
                         }
                     }
                     GravityObject::Sphere(sphere) => {
@@ -161,9 +218,21 @@ impl Model {
     pub fn copy_selected(&mut self) {
         if (self.objects.len() + self.number_objects_selected() as usize) < MAX_OBJECTS {
             for id in self.selected_object_ids() {
-                let mut object = self.objects.get(&id.to_string()).unwrap().clone().unwrap();
-                object.id = self.object_counter;
-                self.add_object(object);
+                let mut object = self
+                    .objects
+                    .get_mut(&id.to_string())
+                    .unwrap()
+                    .as_mut()
+                    .unwrap();
+                object.is_selected = false;
+                let mut new_object = object.clone();
+                new_object.id = self.object_counter;
+                new_object.is_selected = true;
+                match &mut new_object.object {
+                    GravityObject::Cuboid(cuboid) => cuboid.z_centroid += 1.,
+                    GravityObject::Sphere(sphere) => sphere.z_centroid += 1.,
+                }
+                self.add_object(new_object);
             }
         }
     }
@@ -174,6 +243,47 @@ impl Model {
             self.object_counter += 1;
         }
     }
+
+    pub fn delete_objects(&mut self) {
+        let mut ids_to_delete: Vec<String> = vec![];
+        for (id, object) in self.objects.iter_mut() {
+            match object {
+                Some(obj) => {
+                    if obj.is_selected {
+                        ids_to_delete.push(id.to_string());
+                    }
+                }
+                None => {}
+            }
+        }
+        for id in ids_to_delete {
+            self.objects.remove(&id.to_string());
+        }
+    }
+
+    pub fn save_json(&self) {
+        let data = serde_json::to_string(self).unwrap();
+        let path = current_dir().unwrap();
+        let mut new_path = path.join("models");
+        if !new_path.exists() {
+            create_dir(&new_path).unwrap();
+        }
+        new_path.push(self.name.to_string());
+        new_path.set_extension("json");
+        fs::write(new_path, data).expect("Unable to write file");
+    }
+
+    // pub fn load_json<P: AsRef<Path>>(path: P) -> Result<Model, Box<dyn Error>> {
+    //     // Open the file in read-only mode with buffer.
+    //     let file = File::open(path)?;
+    //     let reader = BufReader::new(file);
+
+    //     // Read the JSON contents of the file as an instance of `User`.
+    //     let u = serde_json::from_reader(reader)?;
+
+    //     // Return the `User`.
+    //     Ok(u)
+    // }
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -200,47 +310,118 @@ impl Default for AddObject {
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct GravityBuilderApp {
     model: Model,
-    measurement_params: MeasurementParameters,
+    data_params: DataParameters,
     #[serde(skip)]
-    plot_group: LinkedAxisGroup,
+    plot_group: [LinkedAxisGroup; 2],
+    plot_view: PlotView,
     add_object: AddObject,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
-pub struct MeasurementParameters {
-    measurement_type: DataType,
+pub struct DataParameters {
+    data_type: DataType,
     x_start: f64,
     x_end: f64,
-    n: usize,
-    y: f64,
+    x_n: usize,
+    x_y: f64,
+    y_start: f64,
+    y_end: f64,
+    y_n: usize,
+    y_x: f64,
     z: f64,
-    gradient: f64,
+    x_gradient: f64,
+    y_gradient: f64,
 }
 
-impl Default for MeasurementParameters {
+impl Default for DataParameters {
     fn default() -> Self {
         Self {
-            measurement_type: DataType::Gz,
+            data_type: DataType::Gz,
             x_start: -10.,
             x_end: 10.,
-            n: 200,
-            y: 0.,
+            x_n: 200,
+            x_y: 0.,
+            y_start: -10.,
+            y_end: 10.,
+            y_n: 200,
+            y_x: 0.,
             z: 0.25,
-            gradient: 0.,
+            x_gradient: 0.,
+            y_gradient: 0.,
         }
     }
 }
 
-impl MeasurementParameters {
-    pub fn points(&self) -> Array2<f64> {
-        let x: Array1<f64> = ndarray::Array::linspace(self.x_start, self.x_end, self.n);
-        let mut points: Array2<f64> = ndarray::Array::zeros((self.n, 3));
+impl DataParameters {
+    pub fn points_xz(&self) -> Array2<f64> {
+        let x: Array1<f64> = ndarray::Array::linspace(self.x_start, self.x_end, self.x_n);
+        let mut points: Array2<f64> = ndarray::Array::zeros((self.x_n, 3));
         for i in 0..x.len() {
             points[[i, 0]] = x[i];
-            points[[i, 1]] = self.y;
-            points[[i, 2]] = self.z + self.gradient * x[i];
+            points[[i, 1]] = self.x_y;
+            points[[i, 2]] = self.z + self.x_gradient * x[i];
         }
         points * 1.0001
+    }
+
+    pub fn points_yz(&self) -> Array2<f64> {
+        let y: Array1<f64> = ndarray::Array::linspace(self.y_start, self.y_end, self.y_n);
+        let mut points: Array2<f64> = ndarray::Array::zeros((self.y_n, 3));
+        for i in 0..y.len() {
+            points[[i, 0]] = self.y_x;
+            points[[i, 1]] = y[i];
+            points[[i, 2]] = self.z + self.y_gradient * y[i];
+        }
+        points * 1.0001
+    }
+
+    // pub fn points_xy(&self) -> Array2<f64> {
+    //     let x: Array1<f64> = ndarray::Array::linspace(self.x_start, self.x_end, self.n);
+    //     let mut points: Array2<f64> = ndarray::Array::zeros((self.n, 3));
+    //     for i in 0..x.len() {
+    //         points[[i, 0]] = x[i];
+    //         points[[i, 1]] = self.y;
+    //         points[[i, 2]] = self.z + self.gradient * x[i];
+    //     }
+    //     points * 1.0001
+    // }
+
+    pub fn ui(&mut self, ui: &mut Ui) {
+        egui::ComboBox::from_label("data type")
+            .selected_text(format!("{:?}", self.data_type))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.data_type, DataType::Gx, "gx");
+                ui.selectable_value(&mut self.data_type, DataType::Gy, "gy");
+                ui.selectable_value(&mut self.data_type, DataType::Gz, "gz");
+                ui.selectable_value(&mut self.data_type, DataType::Gxx, "gxx");
+                ui.selectable_value(&mut self.data_type, DataType::Gxy, "gxy");
+                ui.selectable_value(&mut self.data_type, DataType::Gxz, "gxz");
+                ui.selectable_value(&mut self.data_type, DataType::Gyy, "gyy");
+                ui.selectable_value(&mut self.data_type, DataType::Gyz, "gyz");
+                ui.selectable_value(&mut self.data_type, DataType::Gzz, "gzz");
+            });
+        ui.label("x start");
+        ui.add(egui::Slider::new(&mut self.x_start, -50.0..=0.).text("m"));
+        ui.label("x end");
+        ui.add(egui::Slider::new(&mut self.x_end, 0.0..=50.).text("m"));
+        ui.label("x n measurements");
+        ui.add(egui::Slider::new(&mut self.x_n, 1..=500));
+        ui.label("x y");
+        ui.add(egui::Slider::new(&mut self.x_y, -50.0..=50.));
+        ui.label("x gradient");
+        ui.add(egui::Slider::new(&mut self.x_gradient, -0.5..=0.5));
+        ui.label("y start");
+        ui.add(egui::Slider::new(&mut self.y_start, -50.0..=0.).text("m"));
+        ui.label("y end");
+        ui.add(egui::Slider::new(&mut self.y_end, 0.0..=50.).text("m"));
+        ui.label("y n measurements");
+        ui.add(egui::Slider::new(&mut self.y_n, 1..=500));
+        ui.label("y x");
+        ui.add(egui::Slider::new(&mut self.y_x, -50.0..=50.));
+        ui.label("y gradient");
+        ui.add(egui::Slider::new(&mut self.y_gradient, -0.5..=0.5));
+        ui.label("z");
+        ui.add(egui::Slider::new(&mut self.z, -25.0..=25.));
     }
 }
 
@@ -248,8 +429,12 @@ impl Default for GravityBuilderApp {
     fn default() -> Self {
         Self {
             model: Model::default(),
-            measurement_params: MeasurementParameters::default(),
-            plot_group: LinkedAxisGroup::new(true, false),
+            data_params: DataParameters::default(),
+            plot_group: [
+                LinkedAxisGroup::new(true, false),
+                LinkedAxisGroup::new(true, false),
+            ],
+            plot_view: PlotView::XZ,
             add_object: AddObject::default(),
         }
     }
@@ -282,8 +467,9 @@ impl eframe::App for GravityBuilderApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let Self {
             model,
-            measurement_params,
+            data_params,
             add_object,
+            plot_view,
             plot_group,
         } = self;
 
@@ -303,17 +489,10 @@ impl eframe::App for GravityBuilderApp {
                 });
                 ui.menu_button("Edit", |ui| {
                     if ui.button("Save").clicked() {
-                        let data = serde_json::to_string(&model).unwrap();
-                        let path = current_dir().unwrap();
-                        let mut new_path = path.join("models");
-                        create_dir(&new_path).unwrap();
-                        new_path.push("test");
-                        new_path.set_extension("json");
-                        fs::write(new_path, data).expect("Unable to write file");
+                        model.save_json();
                     }
                     if ui.button("Load").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_file() {
-                            // self.state = AppState::load_from_file(path).unwrap();
                             if let Ok(loaded_model) = read_model_from_file(path) {
                                 *model = loaded_model;
                             }
@@ -327,6 +506,7 @@ impl eframe::App for GravityBuilderApp {
             ui.horizontal(|ui| {
                 ui.heading("Model Settings");
             });
+            ui.text_edit_singleline(&mut model.name);
             ui.radio_value(
                 &mut add_object.object_type,
                 GravityObject::Cuboid(Cuboid::default()),
@@ -356,22 +536,9 @@ impl eframe::App for GravityBuilderApp {
                     is_selected: true,
                 });
             }
-            if ui.button("Remove objects").clicked() {
-                let mut ids_to_delete: Vec<String> = vec![];
-                for (id, object) in model.objects.iter_mut() {
-                    match object {
-                        Some(obj) => {
-                            if obj.is_selected {
-                                ids_to_delete.push(id.to_string());
-                            }
-                        }
-                        None => {}
-                    }
-                }
-                for id in ids_to_delete {
-                    model.objects.remove(&id.to_string());
-                }
-            }
+            // if ui.button("Remove objects").clicked() {
+            //     model.delete_objects();
+            // }
             // Show list of model objects
             egui::ScrollArea::vertical().show(ui, |ui| {
                 for (_, object) in model.objects.iter_mut() {
@@ -387,82 +554,12 @@ impl eframe::App for GravityBuilderApp {
                 }
             });
 
-            if ui.button("print model").clicked() {
-                println!("{:?}", model);
-            }
-
             ui.separator();
             ui.horizontal(|ui| {
-                ui.heading("Measurement Settings");
-                if ui.button("reset").clicked() {
-                    *measurement_params = MeasurementParameters::default();
-                }
+                ui.heading("Data Settings");
             });
             egui::CollapsingHeader::new("measurement").show(ui, |ui| {
-                egui::ComboBox::from_label("data type")
-                    .selected_text(format!("{:?}", measurement_params.measurement_type))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
-                            &mut measurement_params.measurement_type,
-                            DataType::Gx,
-                            "gx",
-                        );
-                        ui.selectable_value(
-                            &mut measurement_params.measurement_type,
-                            DataType::Gy,
-                            "gy",
-                        );
-                        ui.selectable_value(
-                            &mut measurement_params.measurement_type,
-                            DataType::Gz,
-                            "gz",
-                        );
-                        ui.selectable_value(
-                            &mut measurement_params.measurement_type,
-                            DataType::Gxx,
-                            "gxx",
-                        );
-                        ui.selectable_value(
-                            &mut measurement_params.measurement_type,
-                            DataType::Gxy,
-                            "gxy",
-                        );
-                        ui.selectable_value(
-                            &mut measurement_params.measurement_type,
-                            DataType::Gxz,
-                            "gxz",
-                        );
-                        ui.selectable_value(
-                            &mut measurement_params.measurement_type,
-                            DataType::Gyy,
-                            "gyy",
-                        );
-                        ui.selectable_value(
-                            &mut measurement_params.measurement_type,
-                            DataType::Gyz,
-                            "gyz",
-                        );
-                        ui.selectable_value(
-                            &mut measurement_params.measurement_type,
-                            DataType::Gzz,
-                            "gzz",
-                        );
-                    });
-                ui.label("x start");
-                ui.add(egui::Slider::new(&mut measurement_params.x_start, -50.0..=0.).text("m"));
-                ui.label("x end");
-                ui.add(egui::Slider::new(&mut measurement_params.x_end, 0.0..=50.).text("m"));
-                ui.label("n measurements");
-                ui.add(egui::Slider::new(&mut measurement_params.n, 1..=1000));
-                ui.label("y");
-                ui.add(egui::Slider::new(&mut measurement_params.y, -50.0..=50.));
-                ui.label("z");
-                ui.add(egui::Slider::new(&mut measurement_params.z, -25.0..=25.));
-                ui.label("gradient");
-                ui.add(egui::Slider::new(
-                    &mut measurement_params.gradient,
-                    -0.5..=0.5,
-                ));
+                data_params.ui(ui);
             });
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
@@ -486,105 +583,180 @@ impl eframe::App for GravityBuilderApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            let measurement_points = measurement_params.points();
-            let x = measurement_points.index_axis(Axis(1), 0);
-            // Associate colour with a cuboid. Also give cuboid a name id.
-            let data_plot = Plot::new("gravity")
-                .view_aspect(2.0)
-                .link_axis(plot_group.clone())
-                .include_x(-10.)
-                .include_x(10.)
-                .include_y(0.)
-                .width(720.)
-                .auto_bounds_x()
-                .auto_bounds_y()
-                .legend(Legend::default());
-
-            let edit_mode = ctx.input().key_down(Key::M) || ctx.input().key_down(Key::L);
-
-            let model_plot_xz = Plot::new("underground_xz")
-                .view_aspect(2.0)
-                .data_aspect(1.0)
-                .link_axis(plot_group.clone())
-                .include_x(-10.)
-                .include_x(10.)
-                .include_y(2.)
-                .include_y(-10.)
-                .width(720.)
-                .legend(Legend::default())
-                .auto_bounds_x()
-                .auto_bounds_y()
-                .allow_boxed_zoom(if edit_mode { false } else { true })
-                .allow_drag(if edit_mode { false } else { true });
-
-            let mut data_total: Array1<f64> = Array1::zeros(measurement_points.len_of(Axis(0)));
             ui.horizontal(|ui| {
-                data_plot.show(ui, |plot_ui| {
-                    for (_, object) in model.objects.iter() {
-                        match object {
-                            Some(obj) => {
-                                let data = match &obj.object {
-                                    GravityObject::Cuboid(cuboid) => cuboid.calculate(
-                                        &measurement_params.measurement_type,
-                                        &measurement_points,
-                                    ),
-                                    GravityObject::Sphere(sphere) => sphere.calculate(
-                                        &measurement_params.measurement_type,
-                                        &measurement_points,
-                                    ),
-                                };
-                                let data_2d: Vec<_> = x
-                                    .into_iter()
-                                    .zip(data.iter())
-                                    .map(|(x, val)| [*x, *val])
-                                    .collect();
-                                let line = Line::new(data_2d);
-                                plot_ui.line(
-                                    line.name(format!("{}: {}", obj.id, obj.name.to_string()))
-                                        .color(obj.colour)
-                                        .highlight(obj.is_selected),
-                                );
-                                data_total = data_total + &data;
-                            }
-                            None => {}
-                        };
-                    }
-                    let data_2d: Vec<_> = x
-                        .into_iter()
-                        .zip(data_total.into_iter())
-                        .map(|(x, val)| [*x, val])
-                        .collect();
-                    let data_total_line = Line::new(data_2d);
-                    plot_ui.line(
-                        data_total_line
-                            .name("Combined")
-                            .color(Color32::WHITE)
-                            .style(LineStyle::dashed_loose()),
-                    );
-                });
+                plot(ctx, ui, model, data_params, plot_group, &mut PlotView::XZ);
+                plot(ctx, ui, model, data_params, plot_group, &mut PlotView::YZ);
             });
-            ui.separator();
 
-            ui.horizontal(|ui| {
-                let plot_response = model_plot_xz
-                    .show(ui, |plot_ui| {
-                        let plot_points: Vec<[f64; 2]> = measurement_points
-                            .index_axis(Axis(1), 0)
+            if model.number_objects_selected() == 1 {
+                for (_, object) in model.objects.iter_mut() {
+                    match object {
+                        Some(obj) => {
+                            if obj.is_selected {
+                                egui::Window::new("Selected Object").show(ctx, |ui| {
+                                    obj.ui(ui);
+                                });
+                            }
+                        }
+                        None => {}
+                    }
+                }
+            }
+        });
+    }
+}
+
+fn read_model_from_file<P: AsRef<Path>>(path: P) -> Result<Model, Box<dyn Error>> {
+    // Open the file in read-only mode with buffer.
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    // Read the JSON contents of the file as an instance of `User`.
+    let u = serde_json::from_reader(reader)?;
+
+    // Return the `User`.
+    Ok(u)
+}
+
+fn plot(
+    ctx: &Context,
+    ui: &mut Ui,
+    model: &mut Model,
+    data_params: &mut DataParameters,
+    plot_group: &mut [LinkedAxisGroup; 2],
+    plot_view: &mut PlotView,
+) {
+    // The central panel the region left after adding TopPanel's and SidePanel's
+    let data_points = match plot_view {
+        PlotView::XY => todo!(),
+        PlotView::XZ => data_params.points_xz(),
+        PlotView::YZ => data_params.points_yz(),
+    };
+    let pos = match plot_view {
+        PlotView::XY => todo!(),
+        PlotView::XZ => data_points.index_axis(Axis(1), 0),
+        PlotView::YZ => data_points.index_axis(Axis(1), 1),
+    };
+
+    let (data_plot_name, model_plot_name) = match plot_view {
+        PlotView::XY => todo!(),
+        PlotView::XZ => ("data_xz", "model_xz"),
+        PlotView::YZ => ("data_yz", "model_yz"),
+    };
+    let group = match plot_view {
+        PlotView::XY => todo!(),
+        PlotView::XZ => &plot_group[0],
+        PlotView::YZ => &plot_group[1],
+    };
+    // Associate colour with a cuboid. Also give cuboid a name id.
+    let data_plot = Plot::new(data_plot_name)
+        .view_aspect(2.0)
+        .link_axis(group.clone())
+        .include_x(-10.)
+        .include_x(10.)
+        .include_y(0.)
+        .width(720.)
+        .auto_bounds_x()
+        .auto_bounds_y()
+        .legend(Legend::default());
+
+    let edit_mode = ctx.input().key_down(Key::M) || ctx.input().key_down(Key::L);
+
+    let model_plot = Plot::new(model_plot_name)
+        .view_aspect(2.0)
+        .data_aspect(1.0)
+        .link_axis(group.clone())
+        .include_x(-10.)
+        .include_x(10.)
+        .include_y(2.)
+        .include_y(-10.)
+        .width(720.)
+        .legend(Legend::default())
+        .auto_bounds_x()
+        .auto_bounds_y()
+        .allow_boxed_zoom(if edit_mode { false } else { true })
+        .allow_drag(if edit_mode { false } else { true });
+
+    let mut data_total: Array1<f64> = Array1::zeros(data_points.len_of(Axis(0)));
+    // let mut data_yz_total: Array1<f64> = Array1::zeros(data_points.len_of(Axis(0)));
+    ui.vertical(|ui| {
+        data_plot.show(ui, |plot_ui| {
+            for (_, object) in model.objects.iter() {
+                match object {
+                    Some(obj) => {
+                        let data = match &obj.object {
+                            GravityObject::Cuboid(cuboid) => {
+                                cuboid.calculate(&data_params.data_type, &data_points)
+                            }
+                            GravityObject::Sphere(sphere) => {
+                                sphere.calculate(&data_params.data_type, &data_points)
+                            }
+                        };
+                        let data_2d: Vec<_> = pos
                             .into_iter()
-                            .zip(measurement_points.index_axis(Axis(1), 2).into_iter())
-                            .map(|(x, z)| [*x, *z])
+                            .zip(data.iter())
+                            .map(|(p, val)| [*p, *val])
                             .collect();
-                        plot_ui.points(
-                            Points::new(plot_points)
-                                .name("Points")
-                                .color(Color32::WHITE),
+                        let line = Line::new(data_2d);
+                        plot_ui.line(
+                            line.name(format!("{}: {}", obj.id, obj.name.to_string()))
+                                .color(obj.colour)
+                                .highlight(obj.is_selected),
                         );
+                        data_total = data_total + &data;
+                    }
+                    None => {}
+                };
+            }
+            let data_2d: Vec<_> = pos
+                .into_iter()
+                .zip(data_total.into_iter())
+                .map(|(p, val)| [*p, val])
+                .collect();
+            let data_total_line = Line::new(data_2d);
+            plot_ui.line(
+                data_total_line
+                    .name("Combined")
+                    .color(if ctx.style().visuals == Visuals::light() {
+                        Color32::BLACK
+                    } else {
+                        Color32::WHITE
+                    })
+                    .style(LineStyle::dashed_loose()),
+            );
+        });
+        // });
+        // ui.separator();
 
-                        for (id, object) in model.objects.iter() {
-                            match object {
-                                Some(obj) => match obj.object.clone() {
-                                    GravityObject::Cuboid(cuboid) => {
+        // ui.horizontal(|ui| {
+        let plot_response = model_plot
+            .show(ui, |plot_ui| {
+                let idx = match plot_view {
+                    PlotView::XY => todo!(),
+                    PlotView::XZ => 0,
+                    PlotView::YZ => 1,
+                };
+                let plot_points: Vec<[f64; 2]> = data_points
+                    .index_axis(Axis(1), idx)
+                    .into_iter()
+                    .zip(data_points.index_axis(Axis(1), 2).into_iter())
+                    .map(|(p, z)| [*p, *z])
+                    .collect();
+                plot_ui.points(Points::new(plot_points).name("Points").color(
+                    if ctx.style().visuals == Visuals::light() {
+                        Color32::BLACK
+                    } else {
+                        Color32::WHITE
+                    },
+                ));
+
+                for (id, object) in model.objects.iter() {
+                    match object {
+                        Some(obj) => match obj.object.clone() {
+                            GravityObject::Cuboid(cuboid) => {
+                                match plot_view {
+                                    PlotView::XY => todo!(),
+                                    PlotView::XZ => {
                                         let edge_lines = cuboid.edge_lines_xz();
                                         for edge in edge_lines {
                                             plot_ui.line(
@@ -621,7 +793,49 @@ impl eframe::App for GravityBuilderApp {
                                                 .highlight(obj.is_selected),
                                         );
                                     }
-                                    GravityObject::Sphere(sphere) => {
+                                    PlotView::YZ => {
+                                        let edge_lines = cuboid.edge_lines_yz();
+                                        for edge in edge_lines {
+                                            plot_ui.line(
+                                                edge.name(format!(
+                                                    "{}: {}",
+                                                    obj.id,
+                                                    obj.name.to_string()
+                                                ))
+                                                .color(obj.colour)
+                                                .highlight(obj.is_selected),
+                                            );
+                                        }
+                                        let polygon =
+                                            Polygon::new(PlotPoints::from_parametric_callback(
+                                                |t| {
+                                                    (
+                                                        cuboid.y_centroid + 0.5 * t.sin(),
+                                                        cuboid.z_centroid + 0.5 * t.cos(),
+                                                    )
+                                                },
+                                                0.0..TAU,
+                                                100,
+                                            ));
+                                        plot_ui.polygon(
+                                            polygon
+                                                .name(format!(
+                                                    "{}: {}",
+                                                    obj.id,
+                                                    obj.name.to_string()
+                                                ))
+                                                .style(LineStyle::Dashed { length: 5. })
+                                                .fill_alpha(0.)
+                                                .color(obj.colour)
+                                                .highlight(obj.is_selected),
+                                        );
+                                    }
+                                };
+                            }
+                            GravityObject::Sphere(sphere) => {
+                                match plot_view {
+                                    PlotView::XY => todo!(),
+                                    PlotView::XZ => {
                                         let polygon =
                                             Polygon::new(PlotPoints::from_parametric_callback(
                                                 |t| {
@@ -644,72 +858,86 @@ impl eframe::App for GravityBuilderApp {
                                                 .highlight(obj.is_selected),
                                         );
                                     }
-                                },
-                                None => {}
+                                    PlotView::YZ => {
+                                        let polygon =
+                                            Polygon::new(PlotPoints::from_parametric_callback(
+                                                |t| {
+                                                    (
+                                                        sphere.y_centroid + sphere.radius * t.sin(),
+                                                        sphere.z_centroid + sphere.radius * t.cos(),
+                                                    )
+                                                },
+                                                0.0..TAU,
+                                                100,
+                                            ));
+                                        plot_ui.polygon(
+                                            polygon
+                                                .name(format!(
+                                                    "{}: {}",
+                                                    obj.id,
+                                                    obj.name.to_string()
+                                                ))
+                                                .color(obj.colour)
+                                                .highlight(obj.is_selected),
+                                        );
+                                    }
+                                };
                             }
-                        }
-
-                        if plot_ui.plot_hovered() && plot_ui.plot_clicked() {
-                            model.select_by_click_xz(plot_ui);
-                        }
-
-                        if plot_ui.plot_hovered()
-                            && ctx.input().key_pressed(Key::C)
-                            && ctx.input().modifiers.ctrl
-                        {
-                            model.copy_selected();
-                        }
-
-                        if plot_ui.plot_hovered() && ctx.input().key_down(Key::M) {
-                            model.translate_selected_xz(plot_ui);
-                        }
-
-                        if plot_ui.plot_hovered()
-                            && ctx.input().key_down(Key::L)
-                            && model.number_objects_selected() == 1
-                        {
-                            model.scale_selected_xz(plot_ui);
-                        }
-                    })
-                    .response;
-            });
-
-            if model.number_objects_selected() == 1 {
-                for (_, object) in model.objects.iter_mut() {
-                    match object {
-                        Some(obj) => {
-                            if obj.is_selected {
-                                // let current_position = match &mut obj.object {
-                                //     GravityObject::Cuboid(cuboid) => cuboid.centre(),
-                                //     GravityObject::Sphere(sphere) => sphere.centre(),
-                                // };
-                                egui::Window::new("Selected Object")
-                                    // .current_pos(Pos2 {
-                                    //     x: current_position[0] as f32,
-                                    //     y: current_position[2] as f32,
-                                    // })
-                                    .show(ctx, |ui| {
-                                        obj.ui(ui);
-                                    });
-                            }
-                        }
+                        },
                         None => {}
                     }
                 }
-            }
-            // });
-        });
-    }
-}
 
-fn read_model_from_file<P: AsRef<Path>>(path: P) -> Result<Model, Box<dyn Error>> {
-    // Open the file in read-only mode with buffer.
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
+                if plot_ui.plot_hovered() && plot_ui.plot_clicked() {
+                    model.select_by_click(plot_ui, plot_view);
+                }
 
-    // Read the JSON contents of the file as an instance of `User`.
-    let u = serde_json::from_reader(reader)?;
+                if plot_ui.plot_hovered()
+                    && ctx.input().key_pressed(Key::C)
+                    && ctx.input().modifiers.ctrl
+                {
+                    model.copy_selected();
+                }
 
-    // Return the `User`.
-    Ok(u)
+                if plot_ui.plot_hovered() && ctx.input().key_pressed(Key::Delete) {
+                    model.delete_objects();
+                }
+
+                if plot_ui.plot_hovered() && ctx.input().key_down(Key::M) {
+                    model.translate_selected(plot_ui, plot_view);
+                }
+
+                if plot_ui.plot_hovered()
+                    && ctx.input().key_down(Key::L)
+                    && model.number_objects_selected() == 1
+                {
+                    model.scale_selected(plot_ui, plot_view);
+                }
+            })
+            .response;
+    });
+
+    // if model.number_objects_selected() == 1 {
+    //     for (_, object) in model.objects.iter_mut() {
+    //         match object {
+    //             Some(obj) => {
+    //                 if obj.is_selected {
+    //                     // let current_position = match &mut obj.object {
+    //                     //     GravityObject::Cuboid(cuboid) => cuboid.centre(),
+    //                     //     GravityObject::Sphere(sphere) => sphere.centre(),
+    //                     // };
+    //                     egui::Window::new("Selected Object")
+    //                         // .current_pos(Pos2 {
+    //                         //     x: current_position[0] as f32,
+    //                         //     y: current_position[2] as f32,
+    //                         // })
+    //                         .show(ctx, |ui| {
+    //                             obj.ui(ui);
+    //                         });
+    //                 }
+    //             }
+    //             None => {}
+    //         }
+    //     }
+    // }
 }

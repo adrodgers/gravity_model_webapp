@@ -809,6 +809,43 @@ impl Cuboid {
             .for_each(|[i, j]| edges.push(Line::new(vec![verts[*i], verts[*j]])));
         edges
     }
+
+    pub fn vertices_yz(&self) -> Vec<[f64; 2]> {
+        let verts = (self.vertices_axis_aligned() - self.centre())
+            .dot(&rotation_matrix_x(self.x_rotation))
+            .dot(&rotation_matrix_y(self.y_rotation))
+            .dot(&rotation_matrix_z(self.z_rotation))
+            + self.centre();
+        verts
+            .slice(s![.., 1])
+            .iter()
+            .zip(verts.slice(s![.., 2]).iter())
+            .map(|(y, z)| [*y, *z])
+            .collect::<Vec<[f64; 2]>>()
+    }
+
+    pub fn edge_lines_yz(&self) -> Vec<Line> {
+        let mut edges: Vec<Line> = vec![];
+        let verts = self.vertices_yz();
+        let edge_idx: [[usize; 2]; 12] = [
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 0],
+            [4, 5],
+            [5, 6],
+            [6, 7],
+            [7, 4],
+            [3, 5],
+            [4, 0],
+            [6, 2],
+            [7, 1],
+        ];
+        edge_idx
+            .iter()
+            .for_each(|[i, j]| edges.push(Line::new(vec![verts[*i], verts[*j]])));
+        edges
+    }
 }
 
 impl fmt::Display for Cuboid {
