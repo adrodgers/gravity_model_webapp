@@ -13,7 +13,7 @@ use crate::gravity_objects::{
 };
 use egui::{
     plot::{Legend, Line, LineStyle, LinkedAxisGroup, Plot, PlotPoints, PlotUi, Points, Polygon},
-    Color32, Context, Key, Pos2, Style, Ui, Visuals,
+    Color32, Context, Key, Pos2, Style, Ui, Visuals, Align2, Vec2,
 };
 use ndarray::{Array1, Array2, Axis};
 // use serde::Serialize;
@@ -507,35 +507,7 @@ impl eframe::App for GravityBuilderApp {
                 ui.heading("Model Settings");
             });
             ui.text_edit_singleline(&mut model.name);
-            ui.radio_value(
-                &mut add_object.object_type,
-                GravityObject::Cuboid(Cuboid::default()),
-                "Cuboid".to_string(),
-            );
-            ui.radio_value(
-                &mut add_object.object_type,
-                GravityObject::Sphere(Sphere::default()),
-                "Sphere".to_string(),
-            );
-            ui.text_edit_singleline(&mut add_object.name);
-            ui.color_edit_button_srgba(&mut add_object.colour);
-            if ui.button("Create object").clicked() {
-                let object = match add_object.object_type {
-                    GravityObject::Cuboid(_) => GravityObject::Cuboid(Cuboid {
-                        ..Default::default()
-                    }),
-                    GravityObject::Sphere(_) => GravityObject::Sphere(Sphere {
-                        ..Default::default()
-                    }),
-                };
-                model.add_object(GravityModelObject {
-                    object,
-                    name: add_object.name.to_string(),
-                    id: model.object_counter,
-                    colour: add_object.colour,
-                    is_selected: true,
-                });
-            }
+            
             // if ui.button("Remove objects").clicked() {
             //     model.delete_objects();
             // }
@@ -562,24 +534,24 @@ impl eframe::App for GravityBuilderApp {
                 data_params.ui(ui);
             });
 
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                ui.hyperlink("https://github.com/adrodgers/gravity_model_webapp");
-                ui.add(egui::github_link_file!(
-                    "https://github.com/adrodgers/gravity_model_webapp/blob/master/",
-                    "Source code."
-                ));
-                egui::warn_if_debug_build(ui);
-                ui.horizontal(|ui| {
-                    ui.label("powered by ");
-                    ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-                    ui.label(" and ");
-                    ui.hyperlink_to(
-                        "eframe",
-                        "https://github.com/emilk/egui/tree/master/crates/eframe",
-                    );
-                    ui.label(".");
-                });
-            });
+            // ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+            //     ui.hyperlink("https://github.com/adrodgers/gravity_model_webapp");
+            //     ui.add(egui::github_link_file!(
+            //         "https://github.com/adrodgers/gravity_model_webapp/blob/master/",
+            //         "Source code."
+            //     ));
+            //     egui::warn_if_debug_build(ui);
+            //     ui.horizontal(|ui| {
+            //         ui.label("powered by ");
+            //         ui.hyperlink_to("egui", "https://github.com/emilk/egui");
+            //         ui.label(" and ");
+            //         ui.hyperlink_to(
+            //             "eframe",
+            //             "https://github.com/emilk/egui/tree/master/crates/eframe",
+            //         );
+            //         ui.label(".");
+            //     });
+            // });
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -588,12 +560,47 @@ impl eframe::App for GravityBuilderApp {
                 plot(ctx, ui, model, data_params, plot_group, &mut PlotView::YZ);
             });
 
+            egui::Window::new("Add Object")
+            .anchor(Align2::RIGHT_BOTTOM, Vec2{x:0., y:0.})
+            .show(ctx, |ui| {
+                ui.radio_value(
+                    &mut add_object.object_type,
+                    GravityObject::Cuboid(Cuboid::default()),
+                    "Cuboid".to_string(),
+                );
+                ui.radio_value(
+                    &mut add_object.object_type,
+                    GravityObject::Sphere(Sphere::default()),
+                    "Sphere".to_string(),
+                );
+                ui.text_edit_singleline(&mut add_object.name);
+                ui.color_edit_button_srgba(&mut add_object.colour);
+                if ui.button("Create object").clicked() {
+                    let object = match add_object.object_type {
+                        GravityObject::Cuboid(_) => GravityObject::Cuboid(Cuboid {
+                            ..Default::default()
+                        }),
+                        GravityObject::Sphere(_) => GravityObject::Sphere(Sphere {
+                            ..Default::default()
+                        }),
+                    };
+                    model.add_object(GravityModelObject {
+                        object,
+                        name: add_object.name.to_string(),
+                        id: model.object_counter,
+                        colour: add_object.colour,
+                        is_selected: true,
+                    });
+                }
+            });
+
             if model.number_objects_selected() == 1 {
                 for (_, object) in model.objects.iter_mut() {
                     match object {
                         Some(obj) => {
                             if obj.is_selected {
-                                egui::Window::new("Selected Object").show(ctx, |ui| {
+                                egui::Window::new("Selected Object")
+                                .anchor(Align2::LEFT_BOTTOM, Vec2{x:0., y:0.}).show(ctx, |ui| {
                                     obj.ui(ui);
                                 });
                             }
@@ -916,28 +923,4 @@ fn plot(
             })
             .response;
     });
-
-    // if model.number_objects_selected() == 1 {
-    //     for (_, object) in model.objects.iter_mut() {
-    //         match object {
-    //             Some(obj) => {
-    //                 if obj.is_selected {
-    //                     // let current_position = match &mut obj.object {
-    //                     //     GravityObject::Cuboid(cuboid) => cuboid.centre(),
-    //                     //     GravityObject::Sphere(sphere) => sphere.centre(),
-    //                     // };
-    //                     egui::Window::new("Selected Object")
-    //                         // .current_pos(Pos2 {
-    //                         //     x: current_position[0] as f32,
-    //                         //     y: current_position[2] as f32,
-    //                         // })
-    //                         .show(ctx, |ui| {
-    //                             obj.ui(ui);
-    //                         });
-    //                 }
-    //             }
-    //             None => {}
-    //         }
-    //     }
-    // }
 }
