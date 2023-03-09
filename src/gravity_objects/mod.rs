@@ -1,5 +1,5 @@
 use egui::plot::Line;
-use egui::{Color32, Ui};
+use egui::{Color32, Ui, Vec2};
 use ndarray::prelude::*;
 use std::f64::consts::PI;
 use std::fmt;
@@ -28,98 +28,98 @@ pub trait InputUI {
 
 impl InputUI for GravityModelObject {
     fn ui(&mut self, ui: &mut Ui) {
-        ui.text_edit_singleline(&mut self.name);
-        ui.color_edit_button_srgba(&mut self.colour);
+        ui.horizontal(|ui| {
+            ui.label("Name: ");
+            ui.text_edit_singleline(&mut self.name);
+        });
+        ui.horizontal(|ui| {
+            ui.label("Colour: ");
+            ui.color_edit_button_srgba(&mut self.colour);
+        });
 
         match &mut self.object {
             GravityObject::Cuboid(cuboid) => {
-                egui::CollapsingHeader::new("position").show(ui, |ui| {
-                    ui.label("x centroid");
-                    ui.add(egui::Slider::new(&mut cuboid.x_centroid, -50.0..=50.0).text("m"));
-
-                    ui.label("y centroid");
-                    ui.add(egui::Slider::new(&mut cuboid.y_centroid, -50.0..=50.0).text("m"));
-
-                    ui.label("z centroid");
-                    ui.add(egui::Slider::new(&mut cuboid.z_centroid, -25.0..=25.0).text("m"));
+                egui::CollapsingHeader::new("Centroid").show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("x");
+                        ui.add(egui::Slider::new(&mut cuboid.x_centroid, -50.0..=50.0).text("m"));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("y");
+                        ui.add(egui::Slider::new(&mut cuboid.y_centroid, -50.0..=50.0).text("m"));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("z");
+                        ui.add(egui::Slider::new(&mut cuboid.z_centroid, -25.0..=25.0).text("m"));
+                    });
                 });
 
-                egui::CollapsingHeader::new("rotation").show(ui, |ui| {
-                    ui.label("x rotation");
-                    ui.add(
-                        egui::Slider::new(&mut cuboid.x_rotation, -PI / 2.0..=PI / 2.).text("rad"),
-                    );
-
-                    ui.label("y rotation");
-                    ui.add(
-                        egui::Slider::new(&mut cuboid.y_rotation, -PI / 2.0..=PI / 2.).text("rad"),
-                    );
-
-                    ui.label("z rotation");
-                    ui.add(
-                        egui::Slider::new(&mut cuboid.z_rotation, -PI / 2.0..=PI / 2.).text("rad"),
-                    );
+                egui::CollapsingHeader::new("Rotation").show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("x");
+                        ui.add(
+                            egui::Slider::new(&mut cuboid.x_rotation, -PI / 2.0..=PI / 2.)
+                                .text("rad"),
+                        );
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("y");
+                        ui.add(
+                            egui::Slider::new(&mut cuboid.y_rotation, -PI / 2.0..=PI / 2.)
+                                .text("rad"),
+                        );
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("z");
+                        ui.add(
+                            egui::Slider::new(&mut cuboid.z_rotation, -PI / 2.0..=PI / 2.)
+                                .text("rad"),
+                        );
+                    });
                 });
 
-                egui::CollapsingHeader::new("volume").show(ui, |ui| {
-                    ui.label("x length");
+                egui::CollapsingHeader::new("Size").show(ui, |ui| {
+                    ui.label("x");
                     ui.add(egui::Slider::new(&mut cuboid.x_length, 0.1..=100.0).text("m"));
 
-                    ui.label("y length");
+                    ui.label("y");
                     ui.add(egui::Slider::new(&mut cuboid.y_length, 0.1..=100.0).text("m"));
 
-                    ui.label("z length");
+                    ui.label("z");
                     ui.add(
                         egui::Slider::new(&mut cuboid.z_length, 0.1..=25.0)
                             .text("m")
                             .drag_value_speed(0.1),
                     );
                 });
-                egui::CollapsingHeader::new("density").show(ui, |ui| {
+                egui::CollapsingHeader::new("Density").show(ui, |ui| {
                     ui.add(egui::Slider::new(&mut cuboid.density, -3000.0..=22590.).text("kg/m^3"));
-                    if ui.button("soil void").clicked() {
-                        cuboid.density = -1800.;
-                    }
-                    if ui.button("concrete").clicked() {
-                        cuboid.density = 2000.;
-                    }
-                    if ui.button("lead").clicked() {
-                        cuboid.density = 11340.;
-                    }
-                    if ui.button("tungsten").clicked() {
-                        cuboid.density = 19300.;
-                    }
+                    ui.radio_value(&mut cuboid.density, -1800., "Soil Void");
+                    ui.radio_value(&mut cuboid.density, 2000., "Concrete");
+                    ui.radio_value(&mut cuboid.density, 11340., "Lead");
+                    ui.radio_value(&mut cuboid.density, 19300., "Tungsten");
                 });
             }
             GravityObject::Sphere(sphere) => {
-                egui::CollapsingHeader::new("position").show(ui, |ui| {
-                    ui.label("x centroid");
+                egui::CollapsingHeader::new("Centroid").show(ui, |ui| {
+                    ui.label("x");
                     ui.add(egui::Slider::new(&mut sphere.x_centroid, -50.0..=50.0).text("m"));
 
-                    ui.label("y centroid");
+                    ui.label("y");
                     ui.add(egui::Slider::new(&mut sphere.y_centroid, -50.0..=50.0).text("m"));
 
-                    ui.label("z centroid");
+                    ui.label("z");
                     ui.add(egui::Slider::new(&mut sphere.z_centroid, -25.0..=25.0).text("m"));
                 });
-                egui::CollapsingHeader::new("volume").show(ui, |ui| {
-                    ui.label("radius");
+                egui::CollapsingHeader::new("Radius").show(ui, |ui| {
                     ui.add(egui::Slider::new(&mut sphere.radius, 0.1..=100.0).text("m"));
                 });
-                egui::CollapsingHeader::new("density").show(ui, |ui| {
+                egui::CollapsingHeader::new("Density").show(ui, |ui| {
                     ui.add(egui::Slider::new(&mut sphere.density, -3000.0..=22590.).text("kg/m^3"));
-                    if ui.button("soil void").clicked() {
-                        sphere.density = -1800.;
-                    }
-                    if ui.button("concrete").clicked() {
-                        sphere.density = 2000.;
-                    }
-                    if ui.button("lead").clicked() {
-                        sphere.density = 11340.;
-                    }
-                    if ui.button("tungsten").clicked() {
-                        sphere.density = 19300.;
-                    }
+                    ui.radio_value(&mut sphere.density, -1800., "Soil Void");
+                    ui.radio_value(&mut sphere.density, 2000., "Concrete");
+                    ui.radio_value(&mut sphere.density, 11340., "Lead");
+                    ui.radio_value(&mut sphere.density, 19300., "Tungsten");
                 });
             }
         }
@@ -790,6 +790,43 @@ impl Cuboid {
     pub fn edge_lines_xz(&self) -> Vec<Line> {
         let mut edges: Vec<Line> = vec![];
         let verts = self.vertices_xz();
+        let edge_idx: [[usize; 2]; 12] = [
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 0],
+            [4, 5],
+            [5, 6],
+            [6, 7],
+            [7, 4],
+            [3, 5],
+            [4, 0],
+            [6, 2],
+            [7, 1],
+        ];
+        edge_idx
+            .iter()
+            .for_each(|[i, j]| edges.push(Line::new(vec![verts[*i], verts[*j]])));
+        edges
+    }
+
+    pub fn vertices_xy(&self) -> Vec<[f64; 2]> {
+        let verts = (self.vertices_axis_aligned() - self.centre())
+            .dot(&rotation_matrix_x(self.x_rotation))
+            .dot(&rotation_matrix_y(self.y_rotation))
+            .dot(&rotation_matrix_z(self.z_rotation))
+            + self.centre();
+        verts
+            .slice(s![.., 0])
+            .iter()
+            .zip(verts.slice(s![.., 1]).iter())
+            .map(|(x, y)| [*x, *y])
+            .collect::<Vec<[f64; 2]>>()
+    }
+
+    pub fn edge_lines_xy(&self) -> Vec<Line> {
+        let mut edges: Vec<Line> = vec![];
+        let verts = self.vertices_xy();
         let edge_idx: [[usize; 2]; 12] = [
             [0, 1],
             [1, 2],

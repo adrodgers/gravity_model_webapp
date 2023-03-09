@@ -13,12 +13,15 @@ use crate::gravity_objects::{
 };
 use egui::{
     plot::{Legend, Line, LineStyle, LinkedAxisGroup, Plot, PlotPoints, PlotUi, Points, Polygon},
-    Color32, Context, Key, Pos2, Style, Ui, Visuals, Align2, Vec2,
+    Align2, Color32, Context, Key, Pos2, Sense, Stroke, Style, Ui, Vec2, Visuals,
 };
-use ndarray::{Array1, Array2, Axis};
+use itertools::izip;
+use ndarray::{s, Array1, Array2, Axis};
+use ndarray_stats::*;
 // use serde::Serialize;
 
 const MAX_OBJECTS: usize = 10;
+const PLOT_WIDTH: f32 = 750.;
 
 #[derive(serde::Deserialize, serde::Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PlotView {
@@ -115,6 +118,15 @@ impl Model {
                         }
                     }
                 },
+                None => {}
+            }
+        }
+    }
+
+    pub fn deselect_all(&mut self) {
+        for (_, object) in self.objects.iter_mut() {
+            match object {
+                Some(obj) => obj.is_selected = false,
                 None => {}
             }
         }
@@ -314,6 +326,7 @@ pub struct GravityBuilderApp {
     #[serde(skip)]
     plot_group: [LinkedAxisGroup; 2],
     plot_view: PlotView,
+    plot_range: [f64; 2],
     add_object: AddObject,
 }
 
@@ -324,13 +337,15 @@ pub struct DataParameters {
     x_end: f64,
     x_n: usize,
     x_y: f64,
+    x_gradient: f64,
     y_start: f64,
     y_end: f64,
     y_n: usize,
     y_x: f64,
-    z: f64,
-    x_gradient: f64,
     y_gradient: f64,
+    z: f64,
+    grid_x_n: usize,
+    grid_y_n: usize,
 }
 
 impl Default for DataParameters {
@@ -348,6 +363,8 @@ impl Default for DataParameters {
             z: 0.25,
             x_gradient: 0.,
             y_gradient: 0.,
+            grid_x_n: 50,
+            grid_y_n: 50,
         }
     }
 }
@@ -375,19 +392,24 @@ impl DataParameters {
         points * 1.0001
     }
 
-    // pub fn points_xy(&self) -> Array2<f64> {
-    //     let x: Array1<f64> = ndarray::Array::linspace(self.x_start, self.x_end, self.n);
-    //     let mut points: Array2<f64> = ndarray::Array::zeros((self.n, 3));
-    //     for i in 0..x.len() {
-    //         points[[i, 0]] = x[i];
-    //         points[[i, 1]] = self.y;
-    //         points[[i, 2]] = self.z + self.gradient * x[i];
-    //     }
-    //     points * 1.0001
-    // }
+    pub fn points_xy(&self) -> Array2<f64> {
+        let x: Array1<f64> = ndarray::Array::linspace(self.x_start, self.x_end, self.grid_x_n);
+        let y: Array1<f64> = ndarray::Array::linspace(self.y_start, self.y_end, self.grid_y_n);
+        let mut points: Array2<f64> = ndarray::Array::zeros((x.len() * y.len(), 3));
+        let mut idx = 0;
+        for i in 0..x.len() {
+            for j in 0..y.len() {
+                points[[idx, 0]] = x[i];
+                points[[idx, 1]] = y[j];
+                points[[idx, 2]] = self.z + self.x_gradient * x[i] + self.y_gradient * y[j];
+                idx += 1;
+            }
+        }
+        points * 1.0001
+    }
 
     pub fn ui(&mut self, ui: &mut Ui) {
-        egui::ComboBox::from_label("data type")
+        egui::ComboBox::from_label("Component")
             .selected_text(format!("{:?}", self.data_type))
             .show_ui(ui, |ui| {
                 ui.selectable_value(&mut self.data_type, DataType::Gx, "gx");
@@ -400,28 +422,39 @@ impl DataParameters {
                 ui.selectable_value(&mut self.data_type, DataType::Gyz, "gyz");
                 ui.selectable_value(&mut self.data_type, DataType::Gzz, "gzz");
             });
-        ui.label("x start");
-        ui.add(egui::Slider::new(&mut self.x_start, -50.0..=0.).text("m"));
-        ui.label("x end");
-        ui.add(egui::Slider::new(&mut self.x_end, 0.0..=50.).text("m"));
-        ui.label("x n measurements");
-        ui.add(egui::Slider::new(&mut self.x_n, 1..=500));
-        ui.label("x y");
-        ui.add(egui::Slider::new(&mut self.x_y, -50.0..=50.));
-        ui.label("x gradient");
-        ui.add(egui::Slider::new(&mut self.x_gradient, -0.5..=0.5));
-        ui.label("y start");
-        ui.add(egui::Slider::new(&mut self.y_start, -50.0..=0.).text("m"));
-        ui.label("y end");
-        ui.add(egui::Slider::new(&mut self.y_end, 0.0..=50.).text("m"));
-        ui.label("y n measurements");
-        ui.add(egui::Slider::new(&mut self.y_n, 1..=500));
-        ui.label("y x");
-        ui.add(egui::Slider::new(&mut self.y_x, -50.0..=50.));
-        ui.label("y gradient");
-        ui.add(egui::Slider::new(&mut self.y_gradient, -0.5..=0.5));
-        ui.label("z");
-        ui.add(egui::Slider::new(&mut self.z, -25.0..=25.));
+        ui.collapsing("x", |ui| {
+            ui.label("start");
+            ui.add(egui::Slider::new(&mut self.x_start, -50.0..=0.).text("m"));
+            ui.label("end");
+            ui.add(egui::Slider::new(&mut self.x_end, 0.0..=50.).text("m"));
+            ui.label("n measurements");
+            ui.add(egui::Slider::new(&mut self.x_n, 1..=200));
+            ui.label("y");
+            ui.add(egui::Slider::new(&mut self.x_y, self.y_start..=self.y_end));
+            ui.label("gradient");
+        });
+        ui.collapsing("y", |ui| {
+            ui.add(egui::Slider::new(&mut self.x_gradient, -0.5..=0.5));
+            ui.label("start");
+            ui.add(egui::Slider::new(&mut self.y_start, -50.0..=0.).text("m"));
+            ui.label("end");
+            ui.add(egui::Slider::new(&mut self.y_end, 0.0..=50.).text("m"));
+            ui.label("n measurements");
+            ui.add(egui::Slider::new(&mut self.y_n, 1..=200));
+            ui.label("x");
+            ui.add(egui::Slider::new(&mut self.y_x, self.x_start..=self.x_end));
+            ui.label("gradient");
+            ui.add(egui::Slider::new(&mut self.y_gradient, -0.5..=0.5));
+        });
+        ui.collapsing("z", |ui| {
+            ui.add(egui::Slider::new(&mut self.z, -25.0..=25.));
+        });
+        ui.collapsing("grid", |ui| {
+            ui.label("x n measurements");
+            ui.add(egui::Slider::new(&mut self.grid_x_n, 1..=50));
+            ui.label("y n measurements");
+            ui.add(egui::Slider::new(&mut self.grid_y_n, 1..=50));
+        });
     }
 }
 
@@ -435,6 +468,7 @@ impl Default for GravityBuilderApp {
                 LinkedAxisGroup::new(true, false),
             ],
             plot_view: PlotView::XZ,
+            plot_range: [-10., 10.],
             add_object: AddObject::default(),
         }
     }
@@ -470,6 +504,7 @@ impl eframe::App for GravityBuilderApp {
             data_params,
             add_object,
             plot_view,
+            plot_range,
             plot_group,
         } = self;
 
@@ -502,96 +537,153 @@ impl eframe::App for GravityBuilderApp {
             });
         });
 
-        egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading("Model Settings");
-            });
-            ui.text_edit_singleline(&mut model.name);
-            
-            // if ui.button("Remove objects").clicked() {
-            //     model.delete_objects();
-            // }
-            // Show list of model objects
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for (_, object) in model.objects.iter_mut() {
-                    match object {
-                        Some(obj) => {
-                            ui.checkbox(
-                                &mut obj.is_selected,
-                                format!("{}: {}", obj.id, obj.name.to_string()),
-                            );
-                        }
-                        None => {}
-                    }
-                }
-            });
+        // egui::SidePanel::left("side_panel").show(ctx, |ui| {
+        // ui.horizontal(|ui| {
+        //     ui.heading("Model Settings");
+        // });
+        // ui.text_edit_singleline(&mut model.name);
 
-            ui.separator();
-            ui.horizontal(|ui| {
-                ui.heading("Data Settings");
-            });
-            egui::CollapsingHeader::new("measurement").show(ui, |ui| {
-                data_params.ui(ui);
-            });
+        // if ui.button("Remove objects").clicked() {
+        //     model.delete_objects();
+        // }
+        // Show list of model objects
+        // egui::ScrollArea::vertical().show(ui, |ui| {
+        //     for (_, object) in model.objects.iter_mut() {
+        //         match object {
+        //             Some(obj) => {
+        //                 ui.checkbox(
+        //                     &mut obj.is_selected,
+        //                     format!("{}: {}", obj.id, obj.name.to_string()),
+        //                 );
+        //             }
+        //             None => {}
+        //         }
+        //     }
+        // });
 
-            // ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-            //     ui.hyperlink("https://github.com/adrodgers/gravity_model_webapp");
-            //     ui.add(egui::github_link_file!(
-            //         "https://github.com/adrodgers/gravity_model_webapp/blob/master/",
-            //         "Source code."
-            //     ));
-            //     egui::warn_if_debug_build(ui);
-            //     ui.horizontal(|ui| {
-            //         ui.label("powered by ");
-            //         ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-            //         ui.label(" and ");
-            //         ui.hyperlink_to(
-            //             "eframe",
-            //             "https://github.com/emilk/egui/tree/master/crates/eframe",
-            //         );
-            //         ui.label(".");
-            //     });
-            // });
-        });
+        // ui.separator();
+        // ui.horizontal(|ui| {
+        //     ui.heading("Data Settings");
+        // });
+
+        // ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+        //     ui.hyperlink("https://github.com/adrodgers/gravity_model_webapp");
+        //     ui.add(egui::github_link_file!(
+        //         "https://github.com/adrodgers/gravity_model_webapp/blob/master/",
+        //         "Source code."
+        //     ));
+        //     egui::warn_if_debug_build(ui);
+        //     ui.horizontal(|ui| {
+        //         ui.label("powered by ");
+        //         ui.hyperlink_to("egui", "https://github.com/emilk/egui");
+        //         ui.label(" and ");
+        //         ui.hyperlink_to(
+        //             "eframe",
+        //             "https://github.com/emilk/egui/tree/master/crates/eframe",
+        //         );
+        //         ui.label(".");
+        //     });
+        // });
+        // });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
-                plot(ctx, ui, model, data_params, plot_group, &mut PlotView::XZ);
-                plot(ctx, ui, model, data_params, plot_group, &mut PlotView::YZ);
+                let (mut min_x, mut max_x, mut min_y, mut max_y) = (0., 0., 0., 0.);
+                egui::Window::new("XZ View").show(ctx, |ui| {
+                    [min_x, max_x] = plot(
+                        ctx,
+                        ui,
+                        model,
+                        data_params,
+                        plot_group,
+                        &mut PlotView::XZ,
+                        self.plot_range,
+                    );
+                });
+                egui::Window::new("YZ View").show(ctx, |ui| {
+                    [min_y, max_y] = plot(
+                        ctx,
+                        ui,
+                        model,
+                        data_params,
+                        plot_group,
+                        &mut PlotView::YZ,
+                        self.plot_range,
+                    );
+                });
+
+                self.plot_range[0] = min_x.min(min_y);
+                self.plot_range[1] = max_x.max(max_y);
             });
 
-            egui::Window::new("Add Object")
-            .anchor(Align2::RIGHT_BOTTOM, Vec2{x:0., y:0.})
-            .show(ctx, |ui| {
-                ui.radio_value(
-                    &mut add_object.object_type,
-                    GravityObject::Cuboid(Cuboid::default()),
-                    "Cuboid".to_string(),
-                );
-                ui.radio_value(
-                    &mut add_object.object_type,
-                    GravityObject::Sphere(Sphere::default()),
-                    "Sphere".to_string(),
-                );
-                ui.text_edit_singleline(&mut add_object.name);
-                ui.color_edit_button_srgba(&mut add_object.colour);
-                if ui.button("Create object").clicked() {
-                    let object = match add_object.object_type {
-                        GravityObject::Cuboid(_) => GravityObject::Cuboid(Cuboid {
-                            ..Default::default()
-                        }),
-                        GravityObject::Sphere(_) => GravityObject::Sphere(Sphere {
-                            ..Default::default()
-                        }),
-                    };
-                    model.add_object(GravityModelObject {
-                        object,
-                        name: add_object.name.to_string(),
-                        id: model.object_counter,
-                        colour: add_object.colour,
-                        is_selected: true,
+            egui::Window::new("XY View").show(ctx, |ui| {
+                plot_xy(ctx, ui, model, data_params);
+                let gradient = colorous::VIRIDIS;
+                ui.horizontal_wrapped(|ui| {
+                    for i in 1..=10 {
+                        let (rect, _response) =
+                            ui.allocate_at_least(Vec2 { x: 32., y: 16. }, Sense::hover());
+                        let colour = gradient.eval_continuous(1. / i as f64);
+
+                        ui.painter().rect(
+                            rect,
+                            0.,
+                            Color32::from_rgba_premultiplied(colour.r, colour.g, colour.b, 100),
+                            Stroke::new(2., Color32::TRANSPARENT),
+                        );
+                    }
+                });
+            });
+
+            egui::Window::new("Settings").show(ctx, |ui| {
+                egui::CollapsingHeader::new("Data").show(ui, |ui| {
+                    data_params.ui(ui);
+                });
+
+                egui::CollapsingHeader::new("Model").show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Name: ");
+                        ui.text_edit_singleline(&mut model.name);
                     });
-                }
+
+                    egui::CollapsingHeader::new("Create Object").show(ui, |ui| {
+                        ui.radio_value(
+                            &mut add_object.object_type,
+                            GravityObject::Cuboid(Cuboid::default()),
+                            "Cuboid".to_string(),
+                        );
+                        ui.radio_value(
+                            &mut add_object.object_type,
+                            GravityObject::Sphere(Sphere::default()),
+                            "Sphere".to_string(),
+                        );
+                        ui.horizontal(|ui| {
+                            ui.label("Name: ");
+                            ui.text_edit_singleline(&mut add_object.name);
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Colour: ");
+                            ui.color_edit_button_srgba(&mut add_object.colour);
+                        });
+                        if ui.button("Create").clicked() {
+                            let object = match add_object.object_type {
+                                GravityObject::Cuboid(_) => GravityObject::Cuboid(Cuboid {
+                                    ..Default::default()
+                                }),
+                                GravityObject::Sphere(_) => GravityObject::Sphere(Sphere {
+                                    ..Default::default()
+                                }),
+                            };
+                            model.add_object(GravityModelObject {
+                                object,
+                                name: add_object.name.to_string(),
+                                id: model.object_counter,
+                                colour: add_object.colour,
+                                is_selected: true,
+                            });
+                        }
+                    });
+                });
             });
 
             if model.number_objects_selected() == 1 {
@@ -599,8 +691,7 @@ impl eframe::App for GravityBuilderApp {
                     match object {
                         Some(obj) => {
                             if obj.is_selected {
-                                egui::Window::new("Selected Object")
-                                .anchor(Align2::LEFT_BOTTOM, Vec2{x:0., y:0.}).show(ctx, |ui| {
+                                egui::Window::new("Selected Object").show(ctx, |ui| {
                                     obj.ui(ui);
                                 });
                             }
@@ -625,6 +716,150 @@ fn read_model_from_file<P: AsRef<Path>>(path: P) -> Result<Model, Box<dyn Error>
     Ok(u)
 }
 
+fn plot_xy(ctx: &Context, ui: &mut Ui, model: &mut Model, data_params: &mut DataParameters) {
+    let edit_mode = ctx.input().key_down(Key::M) || ctx.input().key_down(Key::L);
+    let data_points = data_params.points_xy();
+    let plot = Plot::new("xy")
+        .view_aspect(1.0)
+        // .include_x(-10.)
+        // .include_x(10.)
+        // .include_y(-10.)
+        // .include_y(10.)
+        .width(PLOT_WIDTH)
+        .auto_bounds_x()
+        .auto_bounds_y()
+        .allow_boxed_zoom(if edit_mode { false } else { true })
+        .allow_drag(if edit_mode { false } else { true });
+    // .legend(Legend::default());
+
+    let mut data_total: Array1<f64> = Array1::zeros(data_points.len_of(Axis(0)));
+
+    plot.show(ui, |plot_ui| {
+        for (_, object) in model.objects.iter() {
+            match object {
+                Some(obj) => {
+                    let data = match &obj.object {
+                        GravityObject::Cuboid(cuboid) => {
+                            let edge_lines = cuboid.edge_lines_xy();
+                            for edge in edge_lines {
+                                plot_ui.line(
+                                    edge.name(format!("{}: {}", obj.id, obj.name.to_string()))
+                                        .color(obj.colour)
+                                        .highlight(obj.is_selected),
+                                );
+                            }
+                            let polygon = Polygon::new(PlotPoints::from_parametric_callback(
+                                |t| {
+                                    (
+                                        cuboid.x_centroid + 0.5 * t.sin(),
+                                        cuboid.y_centroid + 0.5 * t.cos(),
+                                    )
+                                },
+                                0.0..TAU,
+                                100,
+                            ));
+                            plot_ui.polygon(
+                                polygon
+                                    .name(format!("{}: {}", obj.id, obj.name.to_string()))
+                                    .style(LineStyle::Dashed { length: 5. })
+                                    .fill_alpha(0.)
+                                    .color(obj.colour)
+                                    .highlight(obj.is_selected),
+                            );
+                            cuboid.calculate(&data_params.data_type, &data_points)
+                        }
+                        GravityObject::Sphere(sphere) => {
+                            let polygon = Polygon::new(PlotPoints::from_parametric_callback(
+                                |t| {
+                                    (
+                                        sphere.x_centroid + sphere.radius * t.sin(),
+                                        sphere.y_centroid + sphere.radius * t.cos(),
+                                    )
+                                },
+                                0.0..TAU,
+                                100,
+                            ));
+                            plot_ui.polygon(
+                                polygon
+                                    .name(format!("{}: {}", obj.id, obj.name.to_string()))
+                                    .color(obj.colour)
+                                    .highlight(obj.is_selected),
+                            );
+                            sphere.calculate(&data_params.data_type, &data_points)
+                        }
+                    };
+                    data_total = data_total + &data;
+                }
+                None => {}
+            };
+        }
+        let min = data_total.min().unwrap();
+        let max = data_total.max().unwrap();
+
+        let line = Line::new(vec![
+            [data_params.x_start, data_params.x_y],
+            [data_params.x_end, data_params.x_y],
+        ]);
+        plot_ui.line(line.name("x").color(Color32::WHITE).highlight(true));
+
+        let line = Line::new(vec![
+            [data_params.y_x, data_params.y_start],
+            [data_params.y_x, data_params.y_end],
+        ]);
+        plot_ui.line(line.name("y").color(Color32::WHITE).highlight(true));
+
+        let gradient = colorous::VIRIDIS;
+        for (x, y, val) in izip!(
+            data_points.index_axis(Axis(1), 0),
+            data_points.index_axis(Axis(1), 1),
+            data_total.clone(),
+        ) {
+            let val_norm = normalize_range(val, *min, *max);
+            // println!(
+            //     "{},{},{},{}, {}",
+            //     val,
+            //     min,
+            //     max,
+            //     val_norm,
+            //     ((1. - val_norm) * 255.) as u8
+            // );
+            let colour = gradient.eval_continuous(val_norm);
+
+            plot_ui.points(
+                Points::new([*x, *y])
+                    .radius(5.)
+                    .name(format!("{val:.2}"))
+                    // .color(Color32::from_rgb(colour.r, colour.g, colour.b)),
+                    .color(Color32::from_rgba_premultiplied(
+                        colour.r, colour.g, colour.b, 100,
+                    )),
+            );
+        }
+        let mut view = PlotView::XY;
+        if plot_ui.plot_hovered() && plot_ui.plot_clicked() && !ctx.input().modifiers.shift {
+            model.deselect_all();
+            model.select_by_click(plot_ui, &mut view);
+        } else if plot_ui.plot_hovered() && plot_ui.plot_clicked() && ctx.input().modifiers.shift {
+            model.select_by_click(plot_ui, &mut view);
+        }
+        if plot_ui.plot_hovered() && ctx.input().key_pressed(Key::C) && ctx.input().modifiers.ctrl {
+            model.copy_selected();
+        }
+        if plot_ui.plot_hovered() && ctx.input().key_pressed(Key::Delete) {
+            model.delete_objects();
+        }
+        if plot_ui.plot_hovered() && ctx.input().key_down(Key::M) {
+            model.translate_selected(plot_ui, &mut view);
+        }
+        if plot_ui.plot_hovered()
+            && ctx.input().key_down(Key::L)
+            && model.number_objects_selected() == 1
+        {
+            model.scale_selected(plot_ui, &mut view);
+        }
+    });
+}
+
 fn plot(
     ctx: &Context,
     ui: &mut Ui,
@@ -632,7 +867,8 @@ fn plot(
     data_params: &mut DataParameters,
     plot_group: &mut [LinkedAxisGroup; 2],
     plot_view: &mut PlotView,
-) {
+    plot_range: [f64; 2],
+) -> [f64; 2] {
     // The central panel the region left after adding TopPanel's and SidePanel's
     let data_points = match plot_view {
         PlotView::XY => todo!(),
@@ -659,10 +895,11 @@ fn plot(
     let data_plot = Plot::new(data_plot_name)
         .view_aspect(2.0)
         .link_axis(group.clone())
-        .include_x(-10.)
-        .include_x(10.)
-        .include_y(0.)
-        .width(720.)
+        .include_x(-5.)
+        .include_x(5.)
+        .include_y(plot_range[0])
+        .include_y(plot_range[1])
+        .width(PLOT_WIDTH)
         .auto_bounds_x()
         .auto_bounds_y()
         .legend(Legend::default());
@@ -673,11 +910,11 @@ fn plot(
         .view_aspect(2.0)
         .data_aspect(1.0)
         .link_axis(group.clone())
-        .include_x(-10.)
-        .include_x(10.)
+        .include_x(-5.)
+        .include_x(5.)
         .include_y(2.)
-        .include_y(-10.)
-        .width(720.)
+        .include_y(-5.)
+        .width(PLOT_WIDTH)
         .legend(Legend::default())
         .auto_bounds_x()
         .auto_bounds_y()
@@ -710,15 +947,15 @@ fn plot(
                                 .color(obj.colour)
                                 .highlight(obj.is_selected),
                         );
-                        data_total = data_total + &data;
+                        data_total = &data_total + &data;
                     }
                     None => {}
                 };
             }
             let data_2d: Vec<_> = pos
                 .into_iter()
-                .zip(data_total.into_iter())
-                .map(|(p, val)| [*p, val])
+                .zip(data_total.iter())
+                .map(|(p, val)| [*p, *val])
                 .collect();
             let data_total_line = Line::new(data_2d);
             plot_ui.line(
@@ -732,10 +969,7 @@ fn plot(
                     .style(LineStyle::dashed_loose()),
             );
         });
-        // });
-        // ui.separator();
 
-        // ui.horizontal(|ui| {
         let plot_response = model_plot
             .show(ui, |plot_ui| {
                 let idx = match plot_view {
@@ -895,7 +1129,14 @@ fn plot(
                     }
                 }
 
-                if plot_ui.plot_hovered() && plot_ui.plot_clicked() {
+                if plot_ui.plot_hovered() && plot_ui.plot_clicked() && !ctx.input().modifiers.shift
+                {
+                    model.deselect_all();
+                    model.select_by_click(plot_ui, plot_view);
+                } else if plot_ui.plot_hovered()
+                    && plot_ui.plot_clicked()
+                    && ctx.input().modifiers.shift
+                {
                     model.select_by_click(plot_ui, plot_view);
                 }
 
@@ -923,4 +1164,9 @@ fn plot(
             })
             .response;
     });
+    [*data_total.min().unwrap(), *data_total.max().unwrap()]
+}
+
+pub fn normalize_range(value: f64, min: f64, max: f64) -> f64 {
+    (value - min) / (max - min)
 }
