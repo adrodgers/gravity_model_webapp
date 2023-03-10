@@ -26,6 +26,8 @@ itertools = "0.10.5"
 colorous = "1.0.10"
 ndarray-stats = "0.5.1"
 
+getrandom = { version = "0.2", features = ["js"] }
+
 # nalgebra = "0.32.1"
 # glam = "0.22.0"
 
