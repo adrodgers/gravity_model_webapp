@@ -2,6 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 mod gravity_objects;
+mod model;
+mod plot;
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {

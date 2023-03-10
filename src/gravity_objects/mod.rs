@@ -79,18 +79,18 @@ impl InputUI for GravityModelObject {
                 });
 
                 egui::CollapsingHeader::new("Size").show(ui, |ui| {
-                    ui.label("x");
-                    ui.add(egui::Slider::new(&mut cuboid.x_length, 0.1..=100.0).text("m"));
-
-                    ui.label("y");
-                    ui.add(egui::Slider::new(&mut cuboid.y_length, 0.1..=100.0).text("m"));
-
-                    ui.label("z");
-                    ui.add(
-                        egui::Slider::new(&mut cuboid.z_length, 0.1..=25.0)
-                            .text("m")
-                            .drag_value_speed(0.1),
-                    );
+                    ui.horizontal(|ui| {
+                        ui.label("x");
+                        ui.add(egui::Slider::new(&mut cuboid.x_length, 0.1..=100.0).text("m"));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("y");
+                        ui.add(egui::Slider::new(&mut cuboid.y_length, 0.1..=100.0).text("m"));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("z");
+                        ui.add(egui::Slider::new(&mut cuboid.z_length, 0.1..=25.0).text("m"));
+                    });
                 });
                 egui::CollapsingHeader::new("Density").show(ui, |ui| {
                     ui.add(egui::Slider::new(&mut cuboid.density, -3000.0..=22590.).text("kg/m^3"));
@@ -102,14 +102,18 @@ impl InputUI for GravityModelObject {
             }
             GravityObject::Sphere(sphere) => {
                 egui::CollapsingHeader::new("Centroid").show(ui, |ui| {
-                    ui.label("x");
-                    ui.add(egui::Slider::new(&mut sphere.x_centroid, -50.0..=50.0).text("m"));
-
-                    ui.label("y");
-                    ui.add(egui::Slider::new(&mut sphere.y_centroid, -50.0..=50.0).text("m"));
-
-                    ui.label("z");
-                    ui.add(egui::Slider::new(&mut sphere.z_centroid, -25.0..=25.0).text("m"));
+                    ui.horizontal(|ui| {
+                        ui.label("x");
+                        ui.add(egui::Slider::new(&mut sphere.x_centroid, -50.0..=50.0).text("m"));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("y");
+                        ui.add(egui::Slider::new(&mut sphere.y_centroid, -50.0..=50.0).text("m"));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("z");
+                        ui.add(egui::Slider::new(&mut sphere.z_centroid, -25.0..=25.0).text("m"));
+                    });
                 });
                 egui::CollapsingHeader::new("Radius").show(ui, |ui| {
                     ui.add(egui::Slider::new(&mut sphere.radius, 0.1..=100.0).text("m"));
